@@ -1,0 +1,542 @@
+/* src/components/LeadCard.css */
+
+.lead-card {
+  position: relative;
+  cursor: pointer;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  background: #ffffff;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+.lead-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.12);
+  border-color: #d1d5db;
+}
+
+.lead-card:active {
+  transform: translateY(0);
+}
+
+.lead-card-dragging {
+  opacity: 0.7;
+  transform: rotate(2deg);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+/* Status Indicator Bar */
+.lead-card-status-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  z-index: 1;
+}
+
+/* Card Content Padding */
+.lead-card .ant-card-body {
+  padding: 14px !important;
+}
+
+/* Header Section */
+.lead-card-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding-top: 2px;
+}
+
+.lead-card-header-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lead-card-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1e293b;
+  line-height: 1.3;
+  display: block;
+}
+
+.lead-card-venture {
+  font-size: 12px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+}
+
+.lead-card-date {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  display: block;
+}
+
+/* Contact Info Section */
+.lead-card-contacts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 1px solid #f1f5f9;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 10px;
+}
+
+.lead-card-contact-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.contact-icon {
+  color: #94a3b8;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.contact-text {
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.4;
+}
+
+/* Footer Section */
+.lead-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.lead-card-assigned {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #f1f5f9;
+  border-radius: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.footer-icon {
+  color: #64748b;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.footer-text {
+  font-size: 12px;
+  color: #475569;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lead-card-source {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: #dbeafe;
+  color: #1e40af;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.source-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: #1e40af;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+/* Avatar Enhancements */
+.lead-card .ant-avatar {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  border: 2px solid #ffffff;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .lead-card-header {
+    gap: 10px;
+  }
+
+  .lead-card .ant-avatar {
+    width: 36px !important;
+    height: 36px !important;
+    font-size: 14px !important;
+  }
+
+  .lead-card-name {
+    font-size: 14px;
+  }
+
+  .lead-card-venture,
+  .contact-text {
+    font-size: 12px;
+  }
+
+  .footer-text,
+  .source-text {
+    font-size: 11px;
+  }
+}
+
+/* Loading State */
+.lead-card.loading {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* Pulse Animation for New Leads */
+@keyframes pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(59, 130, 246, 0);
+  }
+}
+
+.lead-card.new-lead {
+  animation: pulse 2s infinite;
+}
+
+/* Hover Effects for Interactive Elements */
+.lead-card-contact-item:hover .contact-icon {
+  color: #3b82f6;
+  transform: scale(1.1);
+  transition: all 0.2s ease;
+}
+
+.lead-card-assigned:hover {
+  background: #e0e7ff;
+  transition: background 0.2s ease;
+}
+
+.lead-card-source:hover {
+  background: #bfdbfe;
+  transition: background 0.2s ease;
+}
+/* src/components/LeadCard.css */
+
+.lead-card {
+  position: relative;
+  cursor: pointer;
+  border-radius: 12px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  background: #ffffff;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+.lead-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 20px rgba(0, 0, 0, 0.15);
+  border-color: #cbd5e1;
+}
+
+.lead-card:active {
+  transform: translateY(-1px);
+}
+
+.lead-card-dragging {
+  opacity: 0.75;
+  transform: rotate(2deg) scale(1.02);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.25);
+  cursor: grabbing;
+}
+
+/* Status Indicator Bar */
+.lead-card-status-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  z-index: 1;
+}
+
+/* Card Content Padding */
+.lead-card .ant-card-body {
+  padding: 16px !important;
+}
+
+/* Header Section */
+.lead-card-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding-top: 2px;
+}
+
+.lead-card-header-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lead-card-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.3;
+  display: block;
+  letter-spacing: -0.01em;
+}
+
+/* Venture Row */
+.lead-card-venture-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.venture-icon {
+  color: #64748b;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.lead-card-venture {
+  font-size: 13px;
+  color: #64748b;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+/* Date Badge - Prominent Display */
+.lead-card-date-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 12px;
+  margin-bottom: 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.date-icon {
+  color: #6366f1;
+  font-size: 13px;
+}
+
+.date-text {
+  font-size: 13px;
+  color: #475569;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Contact Info Section */
+.lead-card-contacts {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 0;
+  border-top: 1px solid #f1f5f9;
+  border-bottom: 1px solid #f1f5f9;
+  margin-bottom: 12px;
+  background: #fafbfc;
+  margin-left: -16px;
+  margin-right: -16px;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
+.lead-card-contact-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.2s ease;
+  padding: 2px 0;
+}
+
+.lead-card-contact-item:hover {
+  transform: translateX(2px);
+}
+
+.contact-icon {
+  color: #6366f1;
+  font-size: 14px;
+  flex-shrink: 0;
+  width: 18px;
+  display: flex;
+  justify-content: center;
+}
+
+.contact-text {
+  font-size: 13px;
+  color: #1e293b;
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+/* Footer Section */
+.lead-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.lead-card-assigned {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
+  border-radius: 8px;
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #bfdbfe;
+}
+
+.footer-icon {
+  color: #3b82f6;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.footer-text {
+  font-size: 12px;
+  color: #1e40af;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lead-card-source {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  color: #92400e;
+  border-radius: 8px;
+  flex-shrink: 0;
+  border: 1px solid #fcd34d;
+}
+
+.source-text {
+  font-size: 11px;
+  font-weight: 700;
+  color: #92400e;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Avatar Enhancements */
+.lead-card .ant-avatar {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 3px solid #ffffff;
+}
+
+/* Loading State */
+.lead-card.loading {
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+/* New Lead Highlight */
+.lead-card.new-lead .lead-card-date-badge {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border-color: #93c5fd;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(59, 130, 246, 0);
+  }
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .lead-card-header {
+    gap: 10px;
+  }
+
+  .lead-card .ant-avatar {
+    width: 40px !important;
+    height: 40px !important;
+    font-size: 16px !important;
+  }
+
+  .lead-card-name {
+    font-size: 15px;
+  }
+
+  .lead-card-venture,
+  .contact-text {
+    font-size: 12px;
+  }
+
+  .footer-text,
+  .source-text {
+    font-size: 11px;
+  }
+
+  .lead-card-date-badge {
+    padding: 5px 10px;
+  }
+
+  .date-text {
+    font-size: 12px;
+  }
+}
+
+/* Hover Effects for Interactive Elements */
+.lead-card-contact-item:hover .contact-icon {
+  color: #4f46e5;
+  transform: scale(1.15);
+  transition: all 0.2s ease;
+}
+
+.lead-card-assigned:hover {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  border-color: #93c5fd;
+  transform: scale(1.02);
+  transition: all 0.2s ease;
+}
+
+.lead-card-source:hover {
+  background: linear-gradient(135deg, #fde68a 0%, #fcd34d 100%);
+  border-color: #fbbf24;
+  transform: scale(1.02);
+  transition: all 0.2s ease;
+}
+
+/* Improved text readability */
+.lead-card * {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
