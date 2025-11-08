@@ -5,6 +5,7 @@ import { RcFile } from "antd/es/upload";
 import { importLeads } from "../services/api";
 
 interface CSVRow {
+  id?: string;
   createdAt: string;
   ad_name: string;
   adset_name: string;
@@ -32,6 +33,7 @@ export const CSVImport: React.FC<CSVImportProps> = ({ onImportComplete }) => {
   const [error, setError] = useState<string | null>(null);
 
   const columns = [
+    { title: "ID", dataIndex: "id" },
     { title: "Created At", dataIndex: "createdAt" },
     { title: "Ad Name", dataIndex: "ad_name" },
     { title: "Adset Name", dataIndex: "adset_name" },
@@ -68,6 +70,11 @@ export const CSVImport: React.FC<CSVImportProps> = ({ onImportComplete }) => {
           if (questionIndex === -1 && rawHeaders.length > 12)
             questionIndex = 12;
 
+          // Find id header if present (common header names)
+          const idHeaderIndex = headers.findIndex((h) =>
+            ["id", "lead id", "lead_id", "leadid"].includes(h)
+          );
+
           // Helper to split a line by delimiter and trim quotes
           const splitLine = (line: string) =>
             line.split(delimiter).map((c) => c.replace(/^"|"$/g, "").trim());
@@ -83,6 +90,10 @@ export const CSVImport: React.FC<CSVImportProps> = ({ onImportComplete }) => {
 
             const createdAt =
               rowMap[rawHeaders[1]] || rowMap["created_time"] || "";
+            const id =
+              idHeaderIndex >= 0
+                ? rowMap[rawHeaders[idHeaderIndex]] || ""
+                : undefined;
             const ad_name = rowMap[rawHeaders[3]] || rowMap["ad_name"] || "";
             const adset_name =
               rowMap[rawHeaders[5]] || rowMap["adset_name"] || "";
@@ -103,6 +114,7 @@ export const CSVImport: React.FC<CSVImportProps> = ({ onImportComplete }) => {
             if (!createdAt && !full_name && !email && !phone_number) continue;
 
             data.push({
+              id,
               createdAt,
               ad_name,
               adset_name,
@@ -151,6 +163,7 @@ export const CSVImport: React.FC<CSVImportProps> = ({ onImportComplete }) => {
         if (r.questionHeader) extra[r.questionHeader] = r.questionValue || "";
 
         return {
+          id: r.id,
           name: r.full_name,
           email: r.email,
           phone: r.phone_number,
@@ -242,7 +255,11 @@ export const CSVImport: React.FC<CSVImportProps> = ({ onImportComplete }) => {
           columns={columns}
           size="small"
           scroll={{ y: 400 }}
-          rowKey={(row) => (row.email || "") + "-" + (row.phone_number || "")}
+          rowKey={(row) =>
+            row.id
+              ? String(row.id)
+              : (row.email || "") + "-" + (row.phone_number || "")
+          }
         />
       </Modal>
     </div>

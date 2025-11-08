@@ -272,7 +272,6 @@ export const fetchLeadsByStatus = async (
       salesUserId ? `&userId=${encodeURIComponent(String(salesUserId))}` : ""
     }`;
     const response = await axios.get(url);
-    debugger;
     const payload = normalizeResponse<any>(response);
     if (!payload.success) return payload as ApiResponse<any>;
 
@@ -373,6 +372,7 @@ export const updateLeadStatus = async (
   statusId: string
 ): Promise<ApiResponse<any>> => {
   try {
+    debugger;
     const res = await postAction("leads.updateStatus", { leadId, statusId });
     return normalizeResponse(res);
   } catch (error: any) {

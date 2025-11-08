@@ -1,17 +1,17 @@
 // src/components/LeadDetailsModal.tsx
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Modal,
   Typography,
   Input,
   Button,
   Select,
-  List,
   Avatar,
-  Tag,
   Space,
   message,
   Divider,
+  Row,
+  Col,
 } from "antd";
 import {
   UserOutlined,
@@ -20,13 +20,18 @@ import {
   MailOutlined,
   HomeOutlined,
   TagOutlined,
-  ClockCircleOutlined,
   CalendarOutlined,
   WhatsAppOutlined,
   CopyOutlined,
+  SwapOutlined,
 } from "@ant-design/icons";
 import { Lead, User, Comment } from "../types";
-import { addComment, assignLead } from "../services/api";
+import {
+  addComment,
+  assignLead,
+  fetchStatuses,
+  updateLeadStatus,
+} from "../services/api";
 import "./LeadDetailsModal.css";
 
 const { Text, Title } = Typography;
@@ -54,6 +59,31 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
   const [newComment, setNewComment] = useState("");
   const [submittingComment, setSubmittingComment] = useState(false);
   const [assigningLead, setAssigningLead] = useState(false);
+  const [statuses, setStatuses] = useState<any[]>([]);
+  const [statusChanging, setStatusChanging] = useState(false);
+  const [selectedStatusId, setSelectedStatusId] = useState<string>("");
+
+  useEffect(() => {
+    if (lead) setSelectedStatusId(String(lead.statusId || ""));
+  }, [lead]);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const res = await fetchStatuses();
+        if (mounted && res.success && res.data) {
+          setStatuses(res.data as any[]);
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+    if (isOpen) load();
+    return () => {
+      mounted = false;
+    };
+  }, [isOpen]);
 
   if (!lead) return null;
 
@@ -94,6 +124,25 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
     }
   };
 
+  const handleStatusChange = async (statusId: string) => {
+    if (!lead) return;
+    setStatusChanging(true);
+    try {
+      const resp = await updateLeadStatus(lead.id, String(statusId));
+      if (resp.success) {
+        setSelectedStatusId(String(statusId));
+        message.success("Status updated");
+        onLeadUpdate();
+      } else {
+        message.error(resp.error || "Failed to update status");
+      }
+    } catch (err) {
+      message.error("Error updating status");
+    } finally {
+      setStatusChanging(false);
+    }
+  };
+
   const getStatusColor = () => {
     const colors: Record<string, string> = {
       "1": "#3b82f6",
@@ -102,7 +151,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
       "4": "#10b981",
       "5": "#ef4444",
     };
-    return colors[lead.statusId] || "#6b7280";
+    return colors[String(lead.statusId)] || "#6b7280";
   };
 
   const getInitials = (name: string) => {
@@ -116,7 +165,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
-    message.success(`${label} copied to clipboard`);
+    message.success(`${label} copied`);
   };
 
   const openWhatsApp = (phone: string) => {
@@ -124,66 +173,73 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
     window.open(`https://wa.me/${cleanPhone}`, "_blank");
   };
 
+  const formatDate = (dateStr: string) => {
+    try {
+      return new Date(dateStr).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
   return (
     <Modal
       open={isOpen}
       onCancel={onClose}
-      width={900}
-      className="lead-details-modal"
+      width={850}
+      className="lead-modal-v2"
       title={null}
       footer={null}
       destroyOnClose
     >
-      <div className="modal-content">
-        {/* Compact Header */}
-        <div className="modal-header-compact">
-          <div className="header-left">
+      <div className="lead-modal-content">
+        {/* HERO SECTION - Name, Phone, Status */}
+        <div className="lead-hero">
+          <div className="hero-left">
             <Avatar
-              size={56}
-              style={{
-                backgroundColor: getStatusColor(),
-                fontSize: "22px",
-                fontWeight: 700,
-              }}
+              size={60}
+              className="hero-avatar"
+              style={{ backgroundColor: getStatusColor() }}
             >
               {getInitials(lead.name)}
             </Avatar>
-            <div className="header-text">
-              <Title level={2} className="lead-name-prominent">
+            <div className="hero-info">
+              <Title level={2} className="hero-name">
                 {lead.name}
               </Title>
-              {/* <Tag
-                color={getStatusColor()}
-                className="status-tag-compact"
-                style={{ backgroundColor: getStatusColor() }}
-              >
-                {lead.status}
-              </Tag> */}
+              <Space size="small" className="hero-meta">
+                <CalendarOutlined />
+                <Text className="hero-date">{formatDate(lead.createdAt)}</Text>
+              </Space>
             </div>
           </div>
 
-          {/* Prominent Phone - Right Side */}
           {lead.phone && (
-            <div className="phone-highlight-box">
-              <PhoneOutlined className="phone-icon-large" />
-              <div className="phone-content">
-                <Text className="phone-label">Contact</Text>
-                <Text className="phone-number-large">{lead.phone}</Text>
-                <div className="phone-actions">
+            <div className="hero-phone">
+              <PhoneOutlined className="hero-phone-icon" />
+              <div>
+                <Text className="hero-phone-label">Phone</Text>
+                <Text className="hero-phone-number">{lead.phone}</Text>
+                <div className="hero-phone-actions">
                   <Button
                     size="small"
+                    type="text"
                     icon={<WhatsAppOutlined />}
                     onClick={() => openWhatsApp(lead.phone)}
-                    type="link"
-                    className="whatsapp-btn"
+                    className="btn-whatsapp"
                   >
                     WhatsApp
                   </Button>
                   <Button
                     size="small"
+                    type="text"
                     icon={<CopyOutlined />}
                     onClick={() => copyToClipboard(lead.phone, "Phone")}
-                    type="link"
                   >
                     Copy
                   </Button>
@@ -193,169 +249,172 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
           )}
         </div>
 
-        {/* Assignee Highlight Card */}
-        <div className="assignee-highlight-card">
-          <div className="assignee-info">
-            <UserOutlined className="assignee-icon" />
-            <div className="assignee-content">
-              <Text className="assignee-label">Assigned To</Text>
-              {userRole === "Admin" ? (
+        {/* STATUS & ASSIGNMENT ROW */}
+        <Row gutter={12} className="action-row">
+          <Col span={12}>
+            <div className="action-card">
+              <SwapOutlined className="action-icon" />
+              <div className="action-content">
+                <Text className="action-label">Status</Text>
                 <Select
-                  className="assignee-select-inline"
-                  placeholder="Not assigned"
-                  value={lead.assignedTo?.id}
-                  onChange={handleAssignLead}
-                  loading={assigningLead}
-                  bordered={false}
+                  value={selectedStatusId}
+                  onChange={handleStatusChange}
+                  loading={statusChanging}
+                  className="action-select"
                   size="large"
                 >
-                  {salesTeamMembers.map((member) => (
-                    <Select.Option key={member.id} value={member.id}>
-                      <Space>
-                        <Avatar
-                          size="small"
-                          style={{ backgroundColor: "#6366f1" }}
-                        >
-                          {getInitials(member.name)}
-                        </Avatar>
-                        <Text strong>{member.name}</Text>
-                      </Space>
+                  {statuses.map((s) => (
+                    <Select.Option key={s.id} value={String(s.id)}>
+                      {s.name}
                     </Select.Option>
                   ))}
                 </Select>
-              ) : (
-                <Text className="assignee-name">
-                  {lead.assignedTo?.name || "Unassigned"}
-                </Text>
-              )}
+              </div>
             </div>
-          </div>
-          <div className="timeline-compact">
-            <CalendarOutlined className="timeline-icon-small" />
-            <Text className="timeline-text-small">
-              Created{" "}
-              {new Date(lead.createdAt).toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-              })}
-            </Text>
-          </div>
+          </Col>
+
+          <Col span={12}>
+            <div className="action-card">
+              <UserOutlined className="action-icon" />
+              <div className="action-content">
+                <Text className="action-label">Assigned To</Text>
+                {userRole === "Admin" ? (
+                  <Select
+                    value={lead.assignedTo?.id}
+                    onChange={handleAssignLead}
+                    loading={assigningLead}
+                    className="action-select"
+                    size="large"
+                    placeholder="Unassigned"
+                  >
+                    {salesTeamMembers.map((member) => (
+                      <Select.Option key={member.id} value={member.id}>
+                        {member.name}
+                      </Select.Option>
+                    ))}
+                  </Select>
+                ) : (
+                  <Text className="action-value">
+                    {lead.assignedTo?.name || "Unassigned"}
+                  </Text>
+                )}
+              </div>
+            </div>
+          </Col>
+        </Row>
+
+        {/* CONTACT DETAILS - 2 Column Grid */}
+        <div className="details-section">
+          <Text className="section-label">Contact Details</Text>
+          <Row gutter={[12, 12]} className="details-grid">
+            <Col span={12}>
+              <div className="detail-item">
+                <MailOutlined className="detail-icon" />
+                <div className="detail-text">
+                  <Text className="detail-label">Email</Text>
+                  <Text className="detail-value" copyable>
+                    {lead.email || "—"}
+                  </Text>
+                </div>
+              </div>
+            </Col>
+            <Col span={12}>
+              <div className="detail-item">
+                <HomeOutlined className="detail-icon" />
+                <div className="detail-text">
+                  <Text className="detail-label">Venture</Text>
+                  <Text className="detail-value">{lead.venture || "—"}</Text>
+                </div>
+              </div>
+            </Col>
+            <Col span={12}>
+              <div className="detail-item">
+                <TagOutlined className="detail-icon" />
+                <div className="detail-text">
+                  <Text className="detail-label">Source</Text>
+                  <Text className="detail-value">{lead.source || "—"}</Text>
+                </div>
+              </div>
+            </Col>
+            <Col span={12}>
+              <div className="detail-item">
+                <TagOutlined className="detail-icon" />
+                <div className="detail-text">
+                  <Text className="detail-label">Ad Name</Text>
+                  <Text className="detail-value">{lead.adName || "—"}</Text>
+                </div>
+              </div>
+            </Col>
+          </Row>
         </div>
 
-        {/* Compact Info Grid */}
-        <div className="compact-info-section">
-          <div className="compact-info-row">
-            <div className="compact-info-item">
-              <MailOutlined className="compact-icon" />
-              <Text className="compact-value" copyable>
-                {lead.email || "No email"}
-              </Text>
-            </div>
-            <div className="compact-info-item">
-              <HomeOutlined className="compact-icon" />
-              <Text className="compact-value">
-                {lead.venture || "No venture"}
-              </Text>
-            </div>
-          </div>
-          <div className="compact-info-row">
-            <div className="compact-info-item">
-              <TagOutlined className="compact-icon" />
-              <Text className="compact-value">
-                {lead.source || "No source"}
-              </Text>
-            </div>
-            <div className="compact-info-item">
-              <TagOutlined className="compact-icon" />
-              <Text className="compact-value">
-                {lead.adName || "No ad name"}
-              </Text>
-            </div>
-          </div>
-        </div>
-
-        {/* Extra Fields - Compact */}
+        {/* EXTRA FIELDS */}
         {lead.extraFields && Object.keys(lead.extraFields).length > 0 && (
-          <div className="extra-fields-compact">
-            <Text className="section-title-compact">Additional Responses</Text>
-            <div className="extra-fields-grid">
-              {Object.entries(lead.extraFields).map(([k, v]) => (
-                <div key={k} className="extra-field-item">
-                  <Text className="extra-field-label">{k}</Text>
-                  <Text className="extra-field-value">{v}</Text>
+          <div className="details-section">
+            <Text className="section-label">Additional Information</Text>
+            <div className="extra-fields">
+              {Object.entries(lead.extraFields).map(([key, value]) => (
+                <div key={key} className="extra-field">
+                  <Text className="extra-label">{key}</Text>
+                  <Text className="extra-value">{value}</Text>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        <Divider style={{ margin: "16px 0" }} />
+        <Divider className="section-divider" />
 
-        {/* Comments Section - PROMINENT */}
-        <div className="comments-section-prominent">
-          <Title level={4} className="comments-title-prominent">
-            💬 Activity & Comments ({lead.comments?.length || 0})
-          </Title>
+        {/* COMMENTS SECTION */}
+        <div className="comments-section">
+          <div className="comments-header">
+            <Title level={5} className="comments-title">
+              💬 Comments
+            </Title>
+            <Text className="comments-count">{lead.comments?.length || 0}</Text>
+          </div>
 
-          <div className="comments-list-compact">
+          <div className="comments-list">
             {!lead.comments || lead.comments.length === 0 ? (
-              <div className="empty-comments-compact">
-                <Text type="secondary">
-                  No comments yet. Start the conversation!
-                </Text>
+              <div className="comments-empty">
+                <Text type="secondary">No comments yet</Text>
               </div>
             ) : (
               lead.comments.map((comment: Comment) => (
-                <div key={comment.id} className="comment-item-compact">
-                  <Avatar
-                    size={36}
-                    style={{
-                      backgroundColor: "#6366f1",
-                      fontWeight: 600,
-                    }}
-                  >
-                    {getInitials(comment.userName || "User")}
+                <div key={comment.id} className="comment">
+                  <Avatar size={32} className="comment-avatar">
+                    {getInitials(comment.userName || "U")}
                   </Avatar>
-                  <div className="comment-bubble">
-                    <div className="comment-meta">
-                      <Text strong className="comment-author-compact">
+                  <div className="comment-body">
+                    <div className="comment-header">
+                      <Text strong className="comment-author">
                         {comment.userName || "Unknown"}
                       </Text>
-                      <Text className="comment-time-compact">
-                        {new Date(comment.createdAt).toLocaleDateString(
-                          "en-US",
-                          {
-                            month: "short",
-                            day: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          }
-                        )}
+                      <Text className="comment-date">
+                        {formatDate(comment.createdAt)}
                       </Text>
                     </div>
-                    <Text className="comment-text-compact">{comment.text}</Text>
+                    <Text className="comment-text">{comment.text}</Text>
                   </div>
                 </div>
               ))
             )}
           </div>
 
-          {/* Add Comment - Streamlined */}
-          <div className="comment-form-compact">
-            <Avatar
-              size={36}
-              style={{ backgroundColor: "#8b5cf6", fontWeight: 600 }}
-            >
+          {/* ADD COMMENT */}
+          <div className="comment-form">
+            <Avatar size={32} className="form-avatar">
               {getInitials(currentUser.name)}
             </Avatar>
-            <div className="comment-input-wrapper">
+            <div className="form-input-group">
               <TextArea
                 placeholder="Add a comment..."
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
                 autoSize={{ minRows: 2, maxRows: 4 }}
                 maxLength={500}
-                className="comment-textarea-compact"
+                showCount
+                className="form-textarea"
               />
               <Button
                 type="primary"
@@ -363,7 +422,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                 onClick={handleCommentSubmit}
                 loading={submittingComment}
                 disabled={!newComment.trim()}
-                className="submit-btn-compact"
+                className="form-submit"
               >
                 Send
               </Button>
