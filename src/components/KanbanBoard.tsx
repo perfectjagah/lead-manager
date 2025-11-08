@@ -38,7 +38,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   const [loading, setLoading] = useState(true);
   const [statuses, setStatuses] = useState<any[]>([]);
   // page size used for paginated requests
-  const PAGE_SIZE = 50;
+  const PAGE_SIZE = 10;
 
   // track which pages have been fetched per status (1-based pages)
   const [pagesFetched, setPagesFetched] = useState<Record<string, number[]>>(
@@ -73,7 +73,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         await Promise.all(
           s.map(async (st) => {
             try {
-              const res = await fetchLeadsByStatus(String(st.id), PAGE_SIZE, 0);
+              const res = await fetchLeadsByStatus(
+                String(st.id),
+                PAGE_SIZE,
+                0,
+                userRole === "SalesTeam" ? userId : undefined
+              );
               if (res.success && res.data) {
                 const d = res.data as any;
                 // Defensive filter: only accept leads that explicitly belong to this status.
@@ -183,7 +188,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
       try {
         const promises = [
           (async () => {
-            const res = await fetchLeadsByStatus(oldStatusId!, PAGE_SIZE, 0);
+            const res = await fetchLeadsByStatus(
+              oldStatusId!,
+              PAGE_SIZE,
+              0,
+              userRole === "SalesTeam" ? userId : undefined
+            );
             if (res.success && res.data) {
               const d = res.data as any;
               setLeadsByStatus((p) => ({
@@ -202,7 +212,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             }
           })(),
           (async () => {
-            const res = await fetchLeadsByStatus(newStatusId, PAGE_SIZE, 0);
+            const res = await fetchLeadsByStatus(
+              newStatusId,
+              PAGE_SIZE,
+              0,
+              userRole === "SalesTeam" ? userId : undefined
+            );
             if (res.success && res.data) {
               const d = res.data as any;
               setLeadsByStatus((p) => ({ ...p, [newStatusId]: d.leads || [] }));
@@ -263,7 +278,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         const res = await fetchLeadsByStatus(
           String(statusId),
           PAGE_SIZE,
-          offset
+          offset,
+          userRole === "SalesTeam" ? userId : undefined
         );
         if (res.success && res.data) {
           const d = res.data as any;

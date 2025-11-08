@@ -145,7 +145,7 @@ export const fetchComments = async (): Promise<ApiResponse<Comment[]>> => {
 // it behaves like before and returns the full list (but server-side should honor paging).
 export const fetchLeads = async (
   page = 1,
-  pageSize = 50
+  pageSize = 10
 ): Promise<
   ApiResponse<{
     leads: Lead[];
@@ -262,12 +262,15 @@ export const fetchLeads = async (
 export const fetchLeadsByStatus = async (
   statusId: string,
   limit = 10,
-  offset = 0
+  offset = 0,
+  salesUserId?: string
 ): Promise<ApiResponse<{ leads: Lead[]; total: number }>> => {
   try {
     const url = `${API_BASE_URL}?path=leads&statusId=${encodeURIComponent(
       String(statusId)
-    )}&limit=${limit}&offset=${offset}`;
+    )}&limit=${limit}&offset=${offset}${
+      salesUserId ? `&userId=${encodeURIComponent(String(salesUserId))}` : ""
+    }`;
     const response = await axios.get(url);
     debugger;
     const payload = normalizeResponse<any>(response);
@@ -297,10 +300,17 @@ export const fetchLeadsByStatus = async (
       } catch (err) {
         // ignore and use original array
       }
+
       const total =
         typeof data.total === "number" ? data.total : leadsArr.length;
-      // reuse mapping logic from fetchLeads to convert raw server records into Lead[]
-      // We'll attempt to map minimal fields here; the front-end may enrich later.
+
+      // fetch users to map assignedTo (so we can filter for SalesTeam on client)
+      const usersResp = await fetchUsers();
+      const userMap = new Map<string, any>();
+      if (usersResp.success && usersResp.data) {
+        usersResp.data.forEach((u: any) => userMap.set(String(u.id), u));
+      }
+
       const mapped: Lead[] = (leadsArr || []).map((l: any) => ({
         id: String(l.id || ""),
         name: l.name || l.full_name || "",
@@ -310,7 +320,8 @@ export const fetchLeadsByStatus = async (
         source: l.source || "",
         status: (l.status || l.statusId) as any,
         statusId: String(l.statusId || l.status || ""),
-        assignedTo: null,
+        assignedTo:
+          userMap.get(String(l.assignedUserId || l.assignedTo || "")) || null,
         comments: [],
         adName: l.adName || l.ad_name || "",
         adsetName: l.adsetName || l.adset_name || "",
@@ -329,7 +340,15 @@ export const fetchLeadsByStatus = async (
         updatedAt: l.updatedAt || "",
       }));
 
-      return { success: true, data: { leads: mapped, total } };
+      // If a salesUserId is provided, filter to only leads assigned to that user
+      let finalLeads = mapped;
+      if (salesUserId) {
+        finalLeads = mapped.filter(
+          (m) => m.assignedTo && String(m.assignedTo.id) === String(salesUserId)
+        );
+      }
+
+      return { success: true, data: { leads: finalLeads, total } };
     }
 
     return { success: false, error: "Invalid response format" };
