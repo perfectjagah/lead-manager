@@ -31,6 +31,7 @@ import {
   assignLead,
   fetchStatuses,
   updateLeadStatus,
+  fetchCommentsByLead,
 } from "../services/api";
 import "./LeadDetailsModal.css";
 
@@ -62,10 +63,34 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
   const [statuses, setStatuses] = useState<any[]>([]);
   const [statusChanging, setStatusChanging] = useState(false);
   const [selectedStatusId, setSelectedStatusId] = useState<string>("");
+  const [commentsState, setCommentsState] = useState<Comment[]>([]);
 
   useEffect(() => {
     if (lead) setSelectedStatusId(String(lead.statusId || ""));
   }, [lead]);
+
+  // load comments for this lead when modal opens or lead changes
+  useEffect(() => {
+    let mounted = true;
+    const loadComments = async () => {
+      if (!lead) return;
+      try {
+        const res = await fetchCommentsByLead(lead.id);
+        if (mounted && res.success && res.data) {
+          setCommentsState(res.data as Comment[]);
+        } else if (mounted) {
+          // fallback to any comments embedded in the lead
+          setCommentsState(lead.comments || []);
+        }
+      } catch (err) {
+        if (mounted) setCommentsState(lead.comments || []);
+      }
+    };
+    if (isOpen) loadComments();
+    return () => {
+      mounted = false;
+    };
+  }, [isOpen, lead]);
 
   useEffect(() => {
     let mounted = true;
@@ -95,6 +120,13 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
       const response = await addComment(lead.id, newComment);
       if (response.success) {
         setNewComment("");
+        // refresh comments for this lead
+        try {
+          const res = await fetchCommentsByLead(lead.id);
+          if (res.success && res.data) setCommentsState(res.data as Comment[]);
+        } catch (e) {
+          // ignore
+        }
         onLeadUpdate();
         message.success("Comment added successfully");
       } else {
@@ -375,12 +407,12 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
           </div>
 
           <div className="comments-list">
-            {!lead.comments || lead.comments.length === 0 ? (
+            {!commentsState || commentsState.length === 0 ? (
               <div className="comments-empty">
                 <Text type="secondary">No comments yet</Text>
               </div>
             ) : (
-              lead.comments.map((comment: Comment) => (
+              commentsState.map((comment: Comment) => (
                 <div key={comment.id} className="comment">
                   <Avatar size={32} className="comment-avatar">
                     {getInitials(comment.userName || "U")}

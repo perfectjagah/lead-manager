@@ -11,7 +11,7 @@ import { KanbanBoard } from "./components/KanbanBoard";
 import { LoginForm } from "./components/LoginForm";
 import { LeadDetailsModal } from "./components/LeadDetailsModal";
 import { CSVImport } from "./components/CSVImport";
-import { fetchLeads } from "./services/api";
+import { fetchLeads, fetchUsers } from "./services/api";
 import { Lead, User } from "./types";
 
 const { Header, Sider, Content } = Layout;
@@ -22,7 +22,7 @@ export const App: React.FC = () => {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [showCSVImport, setShowCSVImport] = useState(false);
-  const [salesTeamMembers] = useState<User[]>([]); // In a real app, fetch this from API
+  const [salesTeamMembers, setSalesTeamMembers] = useState<User[]>([]);
 
   const { token } = theme.useToken();
 
@@ -31,6 +31,21 @@ export const App: React.FC = () => {
     if (storedUser) {
       setUser(JSON.parse(storedUser));
     }
+
+    // fetch users and filter sales team members
+    (async () => {
+      try {
+        const res = await fetchUsers();
+        if (res.success && res.data) {
+          const sales = (res.data as any[]).filter(
+            (u) => u.role === "SalesTeam"
+          );
+          setSalesTeamMembers(sales as User[]);
+        }
+      } catch (err) {
+        // ignore
+      }
+    })();
 
     const handleResize = () => {
       setIsMobile(window.innerWidth <= 768);

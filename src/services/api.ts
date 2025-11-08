@@ -310,6 +310,25 @@ export const fetchLeadsByStatus = async (
         usersResp.data.forEach((u: any) => userMap.set(String(u.id), u));
       }
 
+      // fetch comments and map by leadId so we can attach comments to each lead
+      const commentsResp = await fetchComments();
+      const commentsByLead = new Map<string, Comment[]>();
+      if (commentsResp.success && commentsResp.data) {
+        (commentsResp.data as any[]).forEach((c: any) => {
+          const leadId = String(c.leadId || "");
+          const commentObj: Comment = {
+            id: String(c.id || ""),
+            text: c.text || "",
+            userId: String(c.userId || ""),
+            userName: c.userName || "",
+            createdAt: c.createdAt || "",
+          };
+          const arr = commentsByLead.get(leadId) || [];
+          arr.push(commentObj);
+          commentsByLead.set(leadId, arr);
+        });
+      }
+
       const mapped: Lead[] = (leadsArr || []).map((l: any) => ({
         id: String(l.id || ""),
         name: l.name || l.full_name || "",
@@ -321,7 +340,7 @@ export const fetchLeadsByStatus = async (
         statusId: String(l.statusId || l.status || ""),
         assignedTo:
           userMap.get(String(l.assignedUserId || l.assignedTo || "")) || null,
-        comments: [],
+        comments: commentsByLead.get(String(l.id || "")) || [],
         adName: l.adName || l.ad_name || "",
         adsetName: l.adsetName || l.adset_name || "",
         formName: l.formName || l.form_name || "",
@@ -372,7 +391,6 @@ export const updateLeadStatus = async (
   statusId: string
 ): Promise<ApiResponse<any>> => {
   try {
-    debugger;
     const res = await postAction("leads.updateStatus", { leadId, statusId });
     return normalizeResponse(res);
   } catch (error: any) {
@@ -502,6 +520,28 @@ export const testAPI = async (): Promise<ApiResponse<any>> => {
     return {
       success: false,
       error: error?.response?.data?.error || error?.message || "Test failed",
+    };
+  }
+};
+
+// Fetch comments for a single lead (backend should support ?path=comments&leadId=...)
+export const fetchCommentsByLead = async (
+  leadId: string
+): Promise<ApiResponse<Comment[]>> => {
+  try {
+    const url = `${API_BASE_URL}?path=comments&leadId=${encodeURIComponent(
+      String(leadId)
+    )}`;
+    const response = await axios.get(url);
+    return normalizeResponse<Comment[]>(response);
+  } catch (error: any) {
+    console.error("fetchCommentsByLead error:", error);
+    return {
+      success: false,
+      error:
+        error?.response?.data?.error ||
+        error?.message ||
+        "Failed to fetch comments",
     };
   }
 };
