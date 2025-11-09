@@ -157,7 +157,6 @@ export const CSVImport: React.FC<CSVImportProps> = ({ onImportComplete }) => {
 
     try {
       const batchSize = 100;
-      debugger;
       // Fetch existing leads to avoid duplicates (check by id)
       const existingResp = await import("../services/api").then((m) =>
         (m as any).fetchLeads(1, Math.max(previewData.length * 2, 1000))

@@ -155,7 +155,6 @@ export const fetchLeads = async (
   }>
 > => {
   try {
-    debugger;
     const token = getToken();
     const base = `${API_BASE_URL}?path=leads`;
     const url = token
