@@ -8,6 +8,7 @@ import {
   LogoutOutlined,
 } from "@ant-design/icons";
 import { KanbanBoard } from "./components/KanbanBoard";
+import { LeadsTable } from "./components/LeadsTable";
 import { LoginForm } from "./components/LoginForm";
 import { LeadDetailsModal } from "./components/LeadDetailsModal";
 import { CSVImport } from "./components/CSVImport";
@@ -24,6 +25,8 @@ export const App: React.FC = () => {
   const [showCSVImport, setShowCSVImport] = useState(false);
   const [salesTeamMembers, setSalesTeamMembers] = useState<User[]>([]);
   const reloadBoardRef = useRef<(() => Promise<void>) | null>(null);
+  const reloadTableRef = useRef<(() => Promise<void>) | null>(null);
+  const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
 
   const { token } = theme.useToken();
 
@@ -82,11 +85,8 @@ export const App: React.FC = () => {
     // Ask the Kanban board to reload its data (if available)
     (async () => {
       try {
-        if (reloadBoardRef.current) {
-          await reloadBoardRef.current();
-        } else {
-          // no-op fallback
-        }
+        if (reloadBoardRef.current) await reloadBoardRef.current();
+        if (reloadTableRef.current) await reloadTableRef.current();
       } catch (err) {
         // ignore
       }
@@ -170,12 +170,41 @@ export const App: React.FC = () => {
             minHeight: 280,
           }}
         >
-          <KanbanBoard
-            onLeadClick={handleLeadClick}
-            userRole={user.role}
-            userId={user.id}
-            onReady={(fn) => (reloadBoardRef.current = fn)}
-          />
+          <div
+            style={{
+              marginBottom: 12,
+              display: "flex",
+              justifyContent: "flex-end",
+              gap: 8,
+            }}
+          >
+            <Button
+              type={viewMode === "kanban" ? "primary" : "default"}
+              onClick={() => setViewMode("kanban")}
+            >
+              Kanban View
+            </Button>
+            <Button
+              type={viewMode === "table" ? "primary" : "default"}
+              onClick={() => setViewMode("table")}
+            >
+              Table View
+            </Button>
+          </div>
+
+          {viewMode === "kanban" ? (
+            <KanbanBoard
+              onLeadClick={handleLeadClick}
+              userRole={user.role}
+              userId={user.id}
+              onReady={(fn) => (reloadBoardRef.current = fn)}
+            />
+          ) : (
+            <LeadsTable
+              onLeadClick={handleLeadClick}
+              onReady={(fn) => (reloadTableRef.current = fn)}
+            />
+          )}
         </Content>
       </Layout>
 

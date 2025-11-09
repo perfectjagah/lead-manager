@@ -25,6 +25,7 @@ import {
   WhatsAppOutlined,
   CopyOutlined,
   SwapOutlined,
+  ClockCircleOutlined,
 } from "@ant-design/icons";
 import { Lead, User, Comment } from "../types";
 import {
@@ -65,29 +66,30 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
   const [statusChanging, setStatusChanging] = useState(false);
   const [selectedStatusId, setSelectedStatusId] = useState<string>("");
   const [commentsState, setCommentsState] = useState<Comment[]>([]);
+  const [loadingComments, setLoadingComments] = useState(false);
 
-  // Combined loading state for overlay
   const isAnyLoading = submittingComment || assigningLead || statusChanging;
 
   useEffect(() => {
     if (lead) setSelectedStatusId(String(lead.statusId || ""));
   }, [lead]);
 
-  // load comments for this lead when modal opens or lead changes
   useEffect(() => {
     let mounted = true;
     const loadComments = async () => {
       if (!lead) return;
+      setLoadingComments(true);
       try {
         const res = await fetchCommentsByLead(lead.id);
         if (mounted && res.success && res.data) {
           setCommentsState(res.data as Comment[]);
         } else if (mounted) {
-          // fallback to any comments embedded in the lead
           setCommentsState(lead.comments || []);
         }
       } catch (err) {
         if (mounted) setCommentsState(lead.comments || []);
+      } finally {
+        if (mounted) setLoadingComments(false);
       }
     };
     if (isOpen) loadComments();
@@ -125,13 +127,12 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
       const response = await addComment(lead.id, newComment);
       if (response.success) {
         setNewComment("");
-        // refresh comments for this lead
         try {
           const res = await fetchCommentsByLead(lead.id);
           if (res.success && res.data) {
             setCommentsState(res.data as Comment[]);
             message.success({
-              content: "Comment added successfully",
+              content: "Comment added",
               key: "addComment",
               duration: 2,
             });
@@ -160,23 +161,23 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
     if (!lead) return;
     setAssigningLead(true);
     try {
-      message.loading({ content: "Assigning lead...", key: "assignLead" });
+      message.loading({ content: "Assigning...", key: "assignLead" });
       const response = await assignLead(lead.id, userId);
       if (response.success) {
         message.success({
-          content: "Lead assigned successfully",
+          content: "Lead assigned",
           key: "assignLead",
           duration: 2,
         });
         onLeadUpdate();
       } else {
         message.error({
-          content: response.error || "Failed to assign lead",
+          content: response.error || "Failed to assign",
           key: "assignLead",
         });
       }
     } catch (error) {
-      message.error({ content: "Error assigning lead", key: "assignLead" });
+      message.error({ content: "Error assigning", key: "assignLead" });
     } finally {
       setAssigningLead(false);
     }
@@ -186,24 +187,24 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
     if (!lead) return;
     setStatusChanging(true);
     try {
-      message.loading({ content: "Updating status...", key: "updateStatus" });
+      message.loading({ content: "Updating...", key: "updateStatus" });
       const resp = await updateLeadStatus(lead.id, String(statusId));
       if (resp.success) {
         setSelectedStatusId(String(statusId));
         message.success({
-          content: "Status updated successfully",
+          content: "Status updated",
           key: "updateStatus",
           duration: 2,
         });
         onLeadUpdate();
       } else {
         message.error({
-          content: resp.error || "Failed to update status",
+          content: resp.error || "Failed to update",
           key: "updateStatus",
         });
       }
     } catch (err) {
-      message.error({ content: "Error updating status", key: "updateStatus" });
+      message.error({ content: "Error updating", key: "updateStatus" });
     } finally {
       setStatusChanging(false);
     }
@@ -253,169 +254,197 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
     }
   };
 
+  const getRelativeTime = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+      return formatDate(dateStr);
+    } catch {
+      return dateStr;
+    }
+  };
+
   return (
     <>
       {isAnyLoading && (
         <div className="loading-overlay">
-          <Spin size="large" tip="Please wait..." />
+          <Spin size="large" />
         </div>
       )}
       <Modal
         open={isOpen}
         onCancel={onClose}
-        width={850}
-        className="lead-modal-v2"
+        width={920}
+        className="lead-modal-modern"
         title={null}
         footer={null}
         destroyOnClose
+        centered
       >
-        <div className="lead-modal-content">
-          {/* HERO SECTION - Name, Phone, Status */}
-          <div className="lead-hero">
-            <div className="hero-left">
+        <div className="modal-wrapper">
+          {/* HERO HEADER */}
+          <div className="modal-hero">
+            <div className="hero-main">
               <Avatar
-                size={60}
+                size={68}
                 className="hero-avatar"
                 style={{ backgroundColor: getStatusColor() }}
               >
                 {getInitials(lead.name)}
               </Avatar>
-              <div className="hero-info">
-                <Title level={2} className="hero-name">
+              <div className="hero-details">
+                <Title level={2} className="hero-title">
                   {lead.name}
                 </Title>
-                <Space size="small" className="hero-meta">
-                  <CalendarOutlined />
-                  <Text className="hero-date">
-                    {formatDate(lead.createdAt)}
-                  </Text>
+                <Space size="middle" className="hero-meta">
+                  <span className="hero-meta-item">
+                    <ClockCircleOutlined />
+                    {getRelativeTime(lead.createdAt)}
+                  </span>
+                  {lead.adName && (
+                    <span className="hero-meta-item">
+                      <TagOutlined />
+                      {lead.adName}
+                    </span>
+                  )}
                 </Space>
               </div>
             </div>
 
             {lead.phone && (
-              <div className="hero-phone">
-                <PhoneOutlined className="hero-phone-icon" />
-                <div>
-                  <Text className="hero-phone-label">Phone</Text>
-                  <Text className="hero-phone-number">{lead.phone}</Text>
-                  <div className="hero-phone-actions">
-                    <Button
-                      size="small"
-                      type="text"
-                      icon={<WhatsAppOutlined />}
-                      onClick={() => openWhatsApp(lead.phone)}
-                      className="btn-whatsapp"
-                    >
-                      WhatsApp
-                    </Button>
-                    <Button
-                      size="small"
-                      type="text"
-                      icon={<CopyOutlined />}
-                      onClick={() => copyToClipboard(lead.phone, "Phone")}
-                    >
-                      Copy
-                    </Button>
-                  </div>
+              <div className="hero-phone-card">
+                <PhoneOutlined className="phone-card-icon" />
+                <div className="phone-card-content">
+                  <Text className="phone-card-label">Phone</Text>
+                  <Text className="phone-card-number">{lead.phone}</Text>
+                </div>
+                <div className="phone-card-actions">
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<WhatsAppOutlined />}
+                    onClick={() => openWhatsApp(lead.phone)}
+                    className="phone-action-btn whatsapp-btn"
+                  >
+                    WhatsApp
+                  </Button>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<CopyOutlined />}
+                    onClick={() => copyToClipboard(lead.phone, "Phone")}
+                    className="phone-action-btn"
+                  >
+                    Copy
+                  </Button>
                 </div>
               </div>
             )}
           </div>
 
-          {/* STATUS & ASSIGNMENT ROW */}
-          <Row gutter={12} className="action-row">
-            <Col span={12}>
-              <div className="action-card">
-                <SwapOutlined className="action-icon" />
-                <div className="action-content">
-                  <Text className="action-label">Status</Text>
+          {/* QUICK ACTIONS */}
+          <div className="quick-actions">
+            <div className="action-item">
+              <SwapOutlined className="action-item-icon" />
+              <div className="action-item-content">
+                <Text className="action-item-label">Status</Text>
+                <Select
+                  value={selectedStatusId}
+                  onChange={handleStatusChange}
+                  loading={statusChanging}
+                  className="action-select"
+                  disabled={isAnyLoading}
+                >
+                  {statuses.map((s) => (
+                    <Select.Option key={s.id} value={String(s.id)}>
+                      {s.name}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+
+            <div className="action-item">
+              <UserOutlined className="action-item-icon" />
+              <div className="action-item-content">
+                <Text className="action-item-label">Assigned To</Text>
+                {userRole === "Admin" ? (
                   <Select
-                    value={selectedStatusId}
-                    onChange={handleStatusChange}
-                    loading={statusChanging}
+                    value={lead.assignedTo?.id}
+                    onChange={handleAssignLead}
+                    loading={assigningLead}
                     className="action-select"
-                    size="large"
+                    placeholder="Unassigned"
+                    disabled={isAnyLoading}
                   >
-                    {statuses.map((s) => (
-                      <Select.Option key={s.id} value={String(s.id)}>
-                        {s.name}
+                    {salesTeamMembers.map((member) => (
+                      <Select.Option key={member.id} value={member.id}>
+                        {member.name}
                       </Select.Option>
                     ))}
                   </Select>
-                </div>
+                ) : (
+                  <Text className="action-static-value">
+                    {lead.assignedTo?.name || "Unassigned"}
+                  </Text>
+                )}
               </div>
-            </Col>
+            </div>
+          </div>
 
-            <Col span={12}>
-              <div className="action-card">
-                <UserOutlined className="action-icon" />
-                <div className="action-content">
-                  <Text className="action-label">Assigned To</Text>
-                  {userRole === "Admin" ? (
-                    <Select
-                      value={lead.assignedTo?.id}
-                      onChange={handleAssignLead}
-                      loading={assigningLead}
-                      className="action-select"
-                      size="large"
-                      placeholder="Unassigned"
-                    >
-                      {salesTeamMembers.map((member) => (
-                        <Select.Option key={member.id} value={member.id}>
-                          {member.name}
-                        </Select.Option>
-                      ))}
-                    </Select>
-                  ) : (
-                    <Text className="action-value">
-                      {lead.assignedTo?.name || "Unassigned"}
-                    </Text>
-                  )}
-                </div>
-              </div>
-            </Col>
-          </Row>
-
-          {/* CONTACT DETAILS - 2 Column Grid */}
-          <div className="details-section">
-            <Text className="section-label">Contact Details</Text>
-            <Row gutter={[12, 12]} className="details-grid">
-              <Col span={12}>
-                <div className="detail-item">
-                  <MailOutlined className="detail-icon" />
-                  <div className="detail-text">
-                    <Text className="detail-label">Email</Text>
-                    <Text className="detail-value" copyable>
+          {/* INFO GRID */}
+          <div className="info-section">
+            <Text className="section-header">Contact Details</Text>
+            <Row gutter={[12, 12]} className="info-grid">
+              <Col xs={24} sm={12}>
+                <div className="info-card">
+                  <MailOutlined className="info-card-icon" />
+                  <div className="info-card-text">
+                    <Text className="info-card-label">Email</Text>
+                    <Text className="info-card-value" copyable ellipsis>
                       {lead.email || "—"}
                     </Text>
                   </div>
                 </div>
               </Col>
-              <Col span={12}>
-                <div className="detail-item">
-                  <HomeOutlined className="detail-icon" />
-                  <div className="detail-text">
-                    <Text className="detail-label">Venture</Text>
-                    <Text className="detail-value">{lead.venture || "—"}</Text>
+              <Col xs={24} sm={12}>
+                <div className="info-card">
+                  <HomeOutlined className="info-card-icon" />
+                  <div className="info-card-text">
+                    <Text className="info-card-label">Venture</Text>
+                    <Text className="info-card-value" ellipsis>
+                      {lead.venture || "—"}
+                    </Text>
                   </div>
                 </div>
               </Col>
-              <Col span={12}>
-                <div className="detail-item">
-                  <TagOutlined className="detail-icon" />
-                  <div className="detail-text">
-                    <Text className="detail-label">Source</Text>
-                    <Text className="detail-value">{lead.source || "—"}</Text>
+              <Col xs={24} sm={12}>
+                <div className="info-card">
+                  <TagOutlined className="info-card-icon" />
+                  <div className="info-card-text">
+                    <Text className="info-card-label">Source</Text>
+                    <Text className="info-card-value" ellipsis>
+                      {lead.source || "—"}
+                    </Text>
                   </div>
                 </div>
               </Col>
-              <Col span={12}>
-                <div className="detail-item">
-                  <TagOutlined className="detail-icon" />
-                  <div className="detail-text">
-                    <Text className="detail-label">Ad Name</Text>
-                    <Text className="detail-value">{lead.adName || "—"}</Text>
+              <Col xs={24} sm={12}>
+                <div className="info-card">
+                  <CalendarOutlined className="info-card-icon" />
+                  <div className="info-card-text">
+                    <Text className="info-card-label">Created</Text>
+                    <Text className="info-card-value">
+                      {formatDate(lead.createdAt)}
+                    </Text>
                   </div>
                 </div>
               </Col>
@@ -424,53 +453,61 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
 
           {/* EXTRA FIELDS */}
           {lead.extraFields && Object.keys(lead.extraFields).length > 0 && (
-            <div className="details-section">
-              <Text className="section-label">Additional Information</Text>
-              <div className="extra-fields">
+            <div className="info-section">
+              <Text className="section-header">Additional Information</Text>
+              <div className="extra-fields-grid">
                 {Object.entries(lead.extraFields).map(([key, value]) => (
-                  <div key={key} className="extra-field">
-                    <Text className="extra-label">{key}</Text>
-                    <Text className="extra-value">{value}</Text>
+                  <div key={key} className="extra-field-card">
+                    <Text className="extra-field-label">{key}</Text>
+                    <Text className="extra-field-value">{value}</Text>
                   </div>
                 ))}
               </div>
             </div>
           )}
 
-          <Divider className="section-divider" />
+          <Divider className="modal-divider" />
 
-          {/* COMMENTS SECTION */}
+          {/* COMMENTS */}
           <div className="comments-section">
             <div className="comments-header">
-              <Title level={5} className="comments-title">
-                💬 Comments
-              </Title>
-              <Text className="comments-count">
-                {lead.comments?.length || 0}
-              </Text>
+              <Space>
+                <Title level={5} className="comments-title">
+                  💬 Activity
+                </Title>
+                <span className="comments-badge">{commentsState.length}</span>
+              </Space>
             </div>
 
-            <div className="comments-list">
-              {!commentsState || commentsState.length === 0 ? (
+            <div className="comments-body">
+              {loadingComments ? (
+                <div className="comments-loading">
+                  <Spin />
+                </div>
+              ) : !commentsState || commentsState.length === 0 ? (
                 <div className="comments-empty">
                   <Text type="secondary">No comments yet</Text>
                 </div>
               ) : (
                 commentsState.map((comment: Comment) => (
-                  <div key={comment.id} className="comment">
-                    <Avatar size={32} className="comment-avatar">
+                  <div key={comment.id} className="comment-bubble">
+                    <Avatar
+                      size={36}
+                      className="comment-avatar"
+                      style={{ backgroundColor: "#6366f1" }}
+                    >
                       {getInitials(comment.userName || "U")}
                     </Avatar>
-                    <div className="comment-body">
-                      <div className="comment-header">
+                    <div className="comment-content">
+                      <div className="comment-meta">
                         <Text strong className="comment-author">
                           {comment.userName || "Unknown"}
                         </Text>
-                        <Text className="comment-date">
-                          {formatDate(comment.createdAt)}
+                        <Text className="comment-time">
+                          {getRelativeTime(comment.createdAt)}
                         </Text>
                       </div>
-                      <Text className="comment-text">{comment.text}</Text>
+                      <Text className="comment-message">{comment.text}</Text>
                     </div>
                   </div>
                 ))
@@ -478,11 +515,15 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
             </div>
 
             {/* ADD COMMENT */}
-            <div className="comment-form">
-              <Avatar size={32} className="form-avatar">
+            <div className="comment-input-section">
+              <Avatar
+                size={36}
+                style={{ backgroundColor: "#8b5cf6" }}
+                className="input-avatar"
+              >
                 {getInitials(currentUser.name)}
               </Avatar>
-              <div className="form-input-group">
+              <div className="input-wrapper">
                 <TextArea
                   placeholder="Add a comment..."
                   value={newComment}
@@ -490,7 +531,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                   autoSize={{ minRows: 2, maxRows: 4 }}
                   maxLength={500}
                   showCount
-                  className="form-textarea"
+                  className="input-textarea"
                   disabled={isAnyLoading}
                 />
                 <Button
@@ -499,7 +540,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                   onClick={handleCommentSubmit}
                   loading={submittingComment}
                   disabled={!newComment.trim() || isAnyLoading}
-                  className="form-submit"
+                  className="input-submit-btn"
                 >
                   Send
                 </Button>
