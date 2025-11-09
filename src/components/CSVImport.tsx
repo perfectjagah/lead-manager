@@ -157,6 +157,23 @@ export const CSVImport: React.FC<CSVImportProps> = ({ onImportComplete }) => {
 
     try {
       const batchSize = 100;
+      debugger;
+      // Fetch existing leads to avoid duplicates (check by id)
+      const existingResp = await import("../services/api").then((m) =>
+        (m as any).fetchLeads(1, Math.max(previewData.length * 2, 1000))
+      );
+      let existingIds = new Set<string>();
+      try {
+        if (existingResp && existingResp.success && existingResp.data) {
+          const existingLeads = existingResp.data.leads || [];
+          existingLeads.forEach((l: any) => {
+            if (l.id) existingIds.add(String(l.id));
+          });
+        }
+      } catch (e) {
+        // ignore and proceed
+      }
+
       // Map previewData to backend shape expected by importLeads
       const mapped = previewData.map((r) => {
         const extra: Record<string, string> = {};
@@ -172,12 +189,36 @@ export const CSVImport: React.FC<CSVImportProps> = ({ onImportComplete }) => {
           adsetName: r.adset_name,
           formName: r.form_name,
           extraFields: extra,
+          // default statusId to 1 for all imported leads
+          statusId: "1",
         } as Partial<any>;
       });
 
+      // Filter out duplicates where incoming row has an id that already exists
+      const toInsert = mapped.filter((m) => {
+        if (m.id && existingIds.has(String(m.id))) return false;
+        return true;
+      });
+
+      const skippedCount = mapped.length - toInsert.length;
+
+      // If nothing to insert after deduplication, inform the user and exit
+      if (toInsert.length === 0) {
+        Modal.info({
+          title: "Nothing to import",
+          content:
+            skippedCount > 0
+              ? `All ${skippedCount} rows were duplicates and were skipped.`
+              : "No new rows to import.",
+        });
+        setShowPreview(false);
+        onImportComplete();
+        return;
+      }
+
       const batches: (typeof mapped)[] = [];
-      for (let i = 0; i < mapped.length; i += batchSize) {
-        batches.push(mapped.slice(i, i + batchSize));
+      for (let i = 0; i < toInsert.length; i += batchSize) {
+        batches.push(toInsert.slice(i, i + batchSize));
       }
 
       let importedCount = 0;
@@ -187,14 +228,16 @@ export const CSVImport: React.FC<CSVImportProps> = ({ onImportComplete }) => {
           throw new Error("Import failed");
         }
         importedCount += batch.length;
-        setImportProgress(
-          Math.round((importedCount / previewData.length) * 100)
-        );
+        setImportProgress(Math.round((importedCount / toInsert.length) * 100));
       }
 
       Modal.success({
         title: "Import Complete",
-        content: "Successfully imported " + importedCount + " leads",
+        content:
+          "Successfully imported " +
+          importedCount +
+          " leads" +
+          (skippedCount > 0 ? ` (skipped ${skippedCount} duplicate IDs)` : ""),
       });
       setShowPreview(false);
       onImportComplete();
