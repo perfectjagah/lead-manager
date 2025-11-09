@@ -1,5 +1,5 @@
 // src/components/KanbanBoard.tsx
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   DragDropContext,
   Droppable,
@@ -7,6 +7,7 @@ import {
   DropResult,
 } from "react-beautiful-dnd";
 import { Typography, Spin, message, Button } from "antd";
+import { DownOutlined, RightOutlined } from "@ant-design/icons";
 import { LeadCard } from "./LeadCard";
 import {
   fetchLeads,
@@ -23,12 +24,14 @@ interface KanbanBoardProps {
   onLeadClick: (lead: Lead) => void;
   userRole: "Admin" | "SalesTeam";
   userId: string;
+  onReady?: (reloadFunc: () => Promise<void>) => void;
 }
 
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   onLeadClick,
   userRole,
   userId,
+  onReady,
 }) => {
   // leadsByStatus stores loaded pages per status
   const [leadsByStatus, setLeadsByStatus] = useState<Record<string, Lead[]>>(
@@ -37,6 +40,10 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   const [totals, setTotals] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(true);
   const [statuses, setStatuses] = useState<any[]>([]);
+  const [expandedStatus, setExpandedStatus] = useState<Record<string, boolean>>(
+    {}
+  );
+  const [isMobile, setIsMobile] = useState(false);
   // page size used for paginated requests
   const PAGE_SIZE = 10;
 
@@ -131,9 +138,52 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     }
   };
 
+  // Handle mobile detection and column state initialization
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
+
+  // Initialize expanded state when statuses load
+  useEffect(() => {
+    if (statuses.length > 0) {
+      const initialState: Record<string, boolean> = {};
+      statuses.forEach((status) => {
+        initialState[String(status.id)] = !isMobile; // Expanded on desktop, collapsed on mobile
+      });
+      setExpandedStatus(initialState);
+    }
+  }, [statuses, isMobile]);
+
+  const toggleColumn = useCallback((statusId: string) => {
+    setExpandedStatus((prev) => ({
+      ...prev,
+      [String(statusId)]: !prev[String(statusId)],
+    }));
+  }, []);
+
+  const reloadLeads = useCallback(async () => {
+    // Reset pages fetched to force a fresh load
+    setPagesFetched({});
+    await loadLeads();
+  }, [loadLeads]);
+
   useEffect(() => {
     loadLeads();
   }, [userRole, userId]);
+
+  // Expose reloadLeads to parent
+  useEffect(() => {
+    if (onReady) {
+      onReady(reloadLeads);
+    }
+  }, [onReady, reloadLeads]);
 
   const onDragEnd = async (result: DropResult) => {
     const { source, destination, draggableId } = result;
@@ -327,9 +377,26 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
           {statuses.map((status) => {
             const columnLeads = getColumnLeads(status.id);
             return (
-              <div key={status.id} className="kanban-column">
+              <div
+                key={status.id}
+                className={`kanban-column ${
+                  !expandedStatus[String(status.id)] ? "collapsed" : ""
+                }`}
+              >
                 <div className="column-header">
                   <Title level={5} className="column-title">
+                    <Button
+                      type="text"
+                      className="column-toggle"
+                      onClick={() => toggleColumn(String(status.id))}
+                      icon={
+                        expandedStatus[String(status.id)] ? (
+                          <DownOutlined />
+                        ) : (
+                          <RightOutlined />
+                        )
+                      }
+                    />
                     <span
                       className="status-indicator"
                       style={{

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Layout, Menu, Button, theme, message, Modal } from "antd";
 import {
   MenuFoldOutlined,
@@ -23,6 +23,7 @@ export const App: React.FC = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [showCSVImport, setShowCSVImport] = useState(false);
   const [salesTeamMembers, setSalesTeamMembers] = useState<User[]>([]);
+  const reloadBoardRef = useRef<(() => Promise<void>) | null>(null);
 
   const { token } = theme.useToken();
 
@@ -78,8 +79,18 @@ export const App: React.FC = () => {
 
   const handleLeadUpdate = () => {
     message.success("Lead updated successfully");
-    // Refresh the board
-    fetchLeads();
+    // Ask the Kanban board to reload its data (if available)
+    (async () => {
+      try {
+        if (reloadBoardRef.current) {
+          await reloadBoardRef.current();
+        } else {
+          // no-op fallback
+        }
+      } catch (err) {
+        // ignore
+      }
+    })();
   };
 
   if (!user) {
@@ -163,6 +174,7 @@ export const App: React.FC = () => {
             onLeadClick={handleLeadClick}
             userRole={user.role}
             userId={user.id}
+            onReady={(fn) => (reloadBoardRef.current = fn)}
           />
         </Content>
       </Layout>
