@@ -32,6 +32,21 @@ export const CSVImport: React.FC<CSVImportProps> = ({ onImportComplete }) => {
   const [importProgress, setImportProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  // Helper: remove one of the provided prefixes from the start of a value
+  const stripPrefix = (
+    val?: string,
+    prefixes: string[] = []
+  ): string | undefined => {
+    if (!val) return undefined;
+    let out = String(val);
+    for (const p of prefixes) {
+      if (out.startsWith(p)) {
+        out = out.slice(p.length);
+        break;
+      }
+    }
+    return out;
+  };
   const columns = [
     { title: "ID", dataIndex: "id" },
     { title: "Created At", dataIndex: "createdAt" },
@@ -178,15 +193,51 @@ export const CSVImport: React.FC<CSVImportProps> = ({ onImportComplete }) => {
         const extra: Record<string, string> = {};
         if (r.questionHeader) extra[r.questionHeader] = r.questionValue || "";
 
+        // sanitize common prefixes coming from the CSV
+        const idSan = stripPrefix(r.id, ["l:"]) || r.id;
+        const phoneSan = stripPrefix(r.phone_number, ["p:"]) || r.phone_number;
+
+        // try to detect raw id-like columns for ad/adset/campaign/form ids and strip their prefixes
+        const raw = r.raw || {};
+        const findRawValue = (frags: string[]) => {
+          for (const k of Object.keys(raw)) {
+            const low = k.toLowerCase().replace(/[_\s-]/g, "");
+            for (const f of frags) {
+              if (low.includes(f)) return raw[k];
+            }
+          }
+          return undefined;
+        };
+
+        const adIdRaw = findRawValue(["adid", "ad_id", "ad"]);
+        const adsetIdRaw = findRawValue(["adsetid", "adset_id", "adset"]);
+        const campaignIdRaw = findRawValue([
+          "campaignid",
+          "campaign_id",
+          "campaign",
+          "c",
+        ]);
+        const formIdRaw = findRawValue(["formid", "form_id", "form"]);
+
+        const adId = stripPrefix(adIdRaw, ["ag:"]) || undefined;
+        const adsetId = stripPrefix(adsetIdRaw, ["as:"]) || undefined;
+        const campaignId = stripPrefix(campaignIdRaw, ["c:"]) || undefined;
+        const formId = stripPrefix(formIdRaw, ["f:"]) || undefined;
+
         return {
-          id: r.id,
+          id: idSan,
           name: r.full_name,
           email: r.email,
-          phone: r.phone_number,
+          phone: phoneSan,
           createdAt: r.createdAt,
           adName: r.ad_name,
           adsetName: r.adset_name,
           formName: r.form_name,
+          // also provide raw ids if present (sanitized)
+          adId,
+          adsetId,
+          campaignId,
+          formId,
           extraFields: extra,
           // default statusId to 1 for all imported leads
           statusId: "1",
