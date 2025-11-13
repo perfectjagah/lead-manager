@@ -23,8 +23,10 @@ export const LeadsTable: React.FC<LeadsTableProps> = ({
   const [total, setTotal] = useState(0);
   const [statuses, setStatuses] = useState<any[]>([]);
   const [salesMembers, setSalesMembers] = useState<any[]>([]);
+  const [projects, setProjects] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [assignedFilter, setAssignedFilter] = useState<string | null>(null);
+  const [projectFilter, setProjectFilter] = useState<string | null>(null);
 
   const loadStatuses = useCallback(async () => {
     try {
@@ -53,8 +55,19 @@ export const LeadsTable: React.FC<LeadsTableProps> = ({
       try {
         const res = await fetchLeads(p, ps);
         if (res.success && res.data) {
-          let arr = res.data.leads || [];
+          const rawArr = res.data.leads || [];
+          // populate available projects from raw results
+          const projectSet = new Set<string>();
+          rawArr.forEach((l: Lead) => {
+            if (l.adName) projectSet.add(String(l.adName));
+          });
+          setProjects(Array.from(projectSet));
+
+          let arr = rawArr;
           // Apply client-side filters for status and assigned person
+          if (projectFilter) {
+            arr = arr.filter((l) => String(l.adName) === String(projectFilter));
+          }
           if (statusFilter) {
             arr = arr.filter(
               (l) => String(l.statusId) === String(statusFilter)
@@ -99,7 +112,7 @@ export const LeadsTable: React.FC<LeadsTableProps> = ({
     // load first page
     loadLeads(1, pageSize);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter, assignedFilter]);
+    }, [statusFilter, assignedFilter, projectFilter]);
 
   const columns = [
     {
@@ -115,6 +128,13 @@ export const LeadsTable: React.FC<LeadsTableProps> = ({
       title: "Contact",
       dataIndex: "phone",
       key: "phone",
+    },
+    {
+      title: "Project",
+      dataIndex: "adName",
+      key: "adName",
+      render: (val: string) => val || "-",
+      sorter: (a: Lead, b: Lead) => String(a.adName || "").localeCompare(String(b.adName || "")),
     },
     {
       title: "Status",
@@ -187,6 +207,21 @@ export const LeadsTable: React.FC<LeadsTableProps> = ({
             {salesMembers.map((m) => (
               <Option key={m.id} value={String(m.id)}>
                 {m.name}
+              </Option>
+            ))}
+          </Select>
+        </Col>
+        <Col xs={24} sm={8} md={6}>
+          <Select
+            allowClear
+            placeholder="Filter by project"
+            style={{ width: "100%" }}
+            value={projectFilter || undefined}
+            onChange={(val) => setProjectFilter(val || null)}
+          >
+            {projects.map((p) => (
+              <Option key={p} value={p}>
+                {p}
               </Option>
             ))}
           </Select>
