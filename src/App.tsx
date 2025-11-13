@@ -203,6 +203,8 @@ export const App: React.FC = () => {
             <LeadsTable
               onLeadClick={handleLeadClick}
               onReady={(fn) => (reloadTableRef.current = fn)}
+              userRole={user.role}
+              userId={user.id}
             />
           )}
         </Content>

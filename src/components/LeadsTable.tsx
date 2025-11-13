@@ -10,11 +10,15 @@ const { Option } = Select;
 interface LeadsTableProps {
   onLeadClick: (lead: Lead) => void;
   onReady?: (reloadFn: () => Promise<void>) => void;
+  userRole?: "Admin" | "SalesTeam";
+  userId?: string;
 }
 
 export const LeadsTable: React.FC<LeadsTableProps> = ({
   onLeadClick,
   onReady,
+  userRole,
+  userId,
 }) => {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [loading, setLoading] = useState(false);
@@ -53,7 +57,18 @@ export const LeadsTable: React.FC<LeadsTableProps> = ({
     async (p = page, ps = pageSize) => {
       setLoading(true);
       try {
-        const res = await fetchLeads(p, ps);
+        // Build server-side filters
+        const filters: Record<string, any> = {};
+        if (statusFilter) filters.StatusId = statusFilter;
+        if (projectFilter) filters.AdName = projectFilter;
+        // If user is not Admin, force AssignedUserId to logged-in user
+        if (userRole && userRole !== "Admin") {
+          filters.AssignedUserId = userId;
+        } else if (assignedFilter) {
+          filters.AssignedUserId = assignedFilter;
+        }
+
+        const res = await fetchLeads(p, ps, filters);
         if (res.success && res.data) {
           const rawArr = res.data.leads || [];
           // populate available projects from raw results
@@ -63,26 +78,9 @@ export const LeadsTable: React.FC<LeadsTableProps> = ({
           });
           setProjects(Array.from(projectSet));
 
-          let arr = rawArr;
-          // Apply client-side filters for status and assigned person
-          if (projectFilter) {
-            arr = arr.filter((l) => String(l.adName) === String(projectFilter));
-          }
-          if (statusFilter) {
-            arr = arr.filter(
-              (l) => String(l.statusId) === String(statusFilter)
-            );
-          }
-          if (assignedFilter) {
-            arr = arr.filter(
-              (l) =>
-                l.assignedTo &&
-                String(l.assignedTo.id) === String(assignedFilter)
-            );
-          }
-          setLeads(arr);
+          setLeads(rawArr);
           setTotal(
-            typeof res.data.total === "number" ? res.data.total : arr.length
+            typeof res.data.total === "number" ? res.data.total : rawArr.length
           );
           setPage(res.data.page || p);
           setPageSize(res.data.pageSize || ps);
@@ -95,7 +93,15 @@ export const LeadsTable: React.FC<LeadsTableProps> = ({
         setLoading(false);
       }
     },
-    [page, pageSize, statusFilter, assignedFilter]
+    [
+      page,
+      pageSize,
+      statusFilter,
+      assignedFilter,
+      projectFilter,
+      userRole,
+      userId,
+    ]
   );
 
   // expose reload
@@ -112,7 +118,7 @@ export const LeadsTable: React.FC<LeadsTableProps> = ({
     // load first page
     loadLeads(1, pageSize);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [statusFilter, assignedFilter, projectFilter]);
+  }, [statusFilter, assignedFilter, projectFilter]);
 
   const columns = [
     {
@@ -134,7 +140,8 @@ export const LeadsTable: React.FC<LeadsTableProps> = ({
       dataIndex: "adName",
       key: "adName",
       render: (val: string) => val || "-",
-      sorter: (a: Lead, b: Lead) => String(a.adName || "").localeCompare(String(b.adName || "")),
+      sorter: (a: Lead, b: Lead) =>
+        String(a.adName || "").localeCompare(String(b.adName || "")),
     },
     {
       title: "Status",
@@ -196,21 +203,23 @@ export const LeadsTable: React.FC<LeadsTableProps> = ({
             ))}
           </Select>
         </Col>
-        <Col xs={24} sm={8} md={6}>
-          <Select
-            allowClear
-            placeholder="Filter by sales person"
-            style={{ width: "100%" }}
-            value={assignedFilter || undefined}
-            onChange={(val) => setAssignedFilter(val || null)}
-          >
-            {salesMembers.map((m) => (
-              <Option key={m.id} value={String(m.id)}>
-                {m.name}
-              </Option>
-            ))}
-          </Select>
-        </Col>
+        {userRole === "Admin" && (
+          <Col xs={24} sm={8} md={6}>
+            <Select
+              allowClear
+              placeholder="Filter by sales person"
+              style={{ width: "100%" }}
+              value={assignedFilter || undefined}
+              onChange={(val) => setAssignedFilter(val || null)}
+            >
+              {salesMembers.map((m) => (
+                <Option key={m.id} value={String(m.id)}>
+                  {m.name}
+                </Option>
+              ))}
+            </Select>
+          </Col>
+        )}
         <Col xs={24} sm={8} md={6}>
           <Select
             allowClear

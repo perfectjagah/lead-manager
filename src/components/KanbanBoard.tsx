@@ -83,7 +83,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               const res = await fetchLeadsByStatus(
                 String(st.id),
                 PAGE_SIZE,
-                0,
+                1,
                 userRole === "SalesTeam" ? userId : undefined
               );
               if (res.success && res.data) {
@@ -241,7 +241,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             const res = await fetchLeadsByStatus(
               oldStatusId!,
               PAGE_SIZE,
-              0,
+              1,
               userRole === "SalesTeam" ? userId : undefined
             );
             if (res.success && res.data) {
@@ -265,7 +265,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             const res = await fetchLeadsByStatus(
               newStatusId,
               PAGE_SIZE,
-              0,
+              1,
               userRole === "SalesTeam" ? userId : undefined
             );
             if (res.success && res.data) {
@@ -324,11 +324,11 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     loadTimers.current[String(statusId)] = window.setTimeout(async () => {
       setLoadingMore((l) => ({ ...l, [String(statusId)]: true }));
       try {
-        const offset = nextPage === 1 ? 0 : nextPage * PAGE_SIZE - PAGE_SIZE;
+        const pageToFetch = nextPage;
         const res = await fetchLeadsByStatus(
           String(statusId),
           PAGE_SIZE,
-          offset,
+          pageToFetch,
           userRole === "SalesTeam" ? userId : undefined
         );
         if (res.success && res.data) {
