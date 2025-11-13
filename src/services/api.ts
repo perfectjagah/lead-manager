@@ -1,13 +1,7 @@
 // src/services/api.ts - OPTIMIZED VERSION
 
 import axios, { AxiosInstance } from "axios";
-import {
-  Lead,
-  LeadStatus,
-  Comment,
-  ImportSummary,
-  ApiResponse,
-} from "../types";
+import { Lead, Comment, ImportSummary, ApiResponse } from "../types";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
