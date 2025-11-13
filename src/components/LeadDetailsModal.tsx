@@ -327,7 +327,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                   <a
                     href={`tel:${lead.phone}`}
                     className="phone-card-number"
-                    onClick={(e) => {
+                    onClick={() => {
                       // Optional: Add analytics or logging here
                       console.log("Phone number clicked:", lead.phone);
                     }}
