@@ -53,6 +53,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   );
   const [loadingMore, setLoadingMore] = useState<Record<string, boolean>>({});
   const loadTimers = useRef<Record<string, number | null>>({});
+  // track pages currently being fetched to prevent duplicate concurrent fetches
+  const inProgressPagesRef = useRef<Record<string, Set<number>>>({});
 
   const loadLeads = async () => {
     setLoading(true);
@@ -323,8 +325,23 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     } catch {}
     loadTimers.current[String(statusId)] = window.setTimeout(async () => {
       setLoadingMore((l) => ({ ...l, [String(statusId)]: true }));
+      const pageToFetch = nextPage;
+
+      // initialize in-progress set for this status
+      if (!inProgressPagesRef.current[String(statusId)])
+        inProgressPagesRef.current[String(statusId)] = new Set<number>();
+
+      // if this page is already being fetched, skip
+      if (inProgressPagesRef.current[String(statusId)].has(pageToFetch)) {
+        setLoadingMore((l) => ({ ...l, [String(statusId)]: false }));
+        loadTimers.current[String(statusId)] = null;
+        return;
+      }
+
+      // mark as in-progress immediately to avoid concurrent fetches
+      inProgressPagesRef.current[String(statusId)].add(pageToFetch);
+
       try {
-        const pageToFetch = nextPage;
         const res = await fetchLeadsByStatus(
           String(statusId),
           PAGE_SIZE,
@@ -337,9 +354,15 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
           const incomingPage: Lead[] = (d.leads || []).filter(
             (l: Lead) => String(l.statusId) === String(statusId)
           );
+
           setLeadsByStatus((prev) => {
             const existing = prev[String(statusId)] || [];
-            const merged = [...existing, ...incomingPage];
+            const existingIds = new Set(existing.map((e) => e.id));
+            // only append items that are not already present
+            const dedupedIncoming = incomingPage.filter(
+              (it) => !existingIds.has(it.id)
+            );
+            const merged = [...existing, ...dedupedIncoming];
             // sort newest first
             const sorted = merged.sort(
               (a, b) =>
@@ -348,19 +371,25 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             );
             return { ...prev, [String(statusId)]: sorted };
           });
+
           setTotals((t) => ({
             ...t,
             [String(statusId)]:
               typeof d.total === "number" ? d.total : t[String(statusId)] || 0,
           }));
+
+          // mark page as fetched
           setPagesFetched((p) => ({
             ...p,
             [String(statusId)]: [...(p[String(statusId)] || []), nextPage],
           }));
         }
       } catch (err) {
-        // ignore
+        // if fetch failed, remove in-progress mark so future attempts can retry
+        inProgressPagesRef.current[String(statusId)].delete(pageToFetch);
       } finally {
+        // cleanup
+        inProgressPagesRef.current[String(statusId)].delete(pageToFetch);
         setLoadingMore((l) => ({ ...l, [String(statusId)]: false }));
         loadTimers.current[String(statusId)] = null;
       }
