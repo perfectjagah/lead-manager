@@ -1,4 +1,5 @@
-// src/services/api.ts
+// src/services/api.ts - OPTIMIZED VERSION
+
 import axios, { AxiosInstance } from "axios";
 import {
   Lead,
@@ -7,11 +8,6 @@ import {
   ImportSummary,
   ApiResponse,
 } from "../types";
-
-/**
- * API client for Google Apps Script backend
- * Uses application/x-www-form-urlencoded to avoid CORS preflight
- */
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
@@ -23,9 +19,61 @@ const api: AxiosInstance = axios.create({
     "Content-Type": "application/x-www-form-urlencoded",
   },
   withCredentials: false,
+  timeout: 30000, // 30 second timeout
 });
 
-// Response interceptor for 401 errors
+// ========== CLIENT-SIDE CACHE ==========
+
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+  expiresAt: number;
+}
+
+class APICache {
+  private cache = new Map<string, CacheEntry<any>>();
+  private readonly DEFAULT_TTL = 60000; // 60 seconds
+
+  set<T>(key: string, data: T, ttl: number = this.DEFAULT_TTL): void {
+    const now = Date.now();
+    this.cache.set(key, {
+      data,
+      timestamp: now,
+      expiresAt: now + ttl,
+    });
+  }
+
+  get<T>(key: string): T | null {
+    const entry = this.cache.get(key);
+    if (!entry) return null;
+
+    const now = Date.now();
+    if (now > entry.expiresAt) {
+      this.cache.delete(key);
+      return null;
+    }
+
+    return entry.data as T;
+  }
+
+  invalidate(pattern: string): void {
+    const keys = Array.from(this.cache.keys());
+    keys.forEach((key) => {
+      if (key.includes(pattern)) {
+        this.cache.delete(key);
+      }
+    });
+  }
+
+  clear(): void {
+    this.cache.clear();
+  }
+}
+
+const apiCache = new APICache();
+
+// ========== AUTH & UTILITIES ==========
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -37,15 +85,12 @@ api.interceptors.response.use(
   }
 );
 
-// Get authentication token from localStorage
 const getToken = (): string | undefined => {
   const raw = localStorage.getItem("user");
   if (!raw) return undefined;
-
   try {
     const parsed = JSON.parse(raw);
     if (!parsed) return undefined;
-
     if (typeof parsed === "object") {
       if (parsed.token) return String(parsed.token);
       if (parsed.user?.token) return String(parsed.user.token);
@@ -56,7 +101,6 @@ const getToken = (): string | undefined => {
   }
 };
 
-// Helper to POST actions with URLSearchParams
 const postAction = async (
   action: string,
   payload: Record<string, any> = {}
@@ -74,29 +118,36 @@ const postAction = async (
     );
   });
 
-  return api.post("", params); // POST to root
+  return api.post("", params);
 };
 
-// Normalize API responses
-const normalizeResponse = <T = any>(res: any): ApiResponse<T> => {
+const normalizeResponse = <T>(res: any): ApiResponse<T> => {
   const payload = res?.data;
   if (!payload) return { success: false, error: "No response" };
-
   if (typeof payload === "object" && "success" in payload) {
     return payload as ApiResponse<T>;
   }
-
   return { success: true, data: payload as T };
 };
 
-// ============================================
-// READ ENDPOINTS
-// ============================================
+// ========== CACHED READ ENDPOINTS ==========
 
-export const fetchStatuses = async (): Promise<ApiResponse<LeadStatus[]>> => {
+export const fetchStatuses = async (): Promise<ApiResponse<any[]>> => {
   try {
+    const cacheKey = "statuses";
+    const cached = apiCache.get<any[]>(cacheKey);
+    if (cached) {
+      return { success: true, data: cached };
+    }
+
     const response = await axios.get(`${API_BASE_URL}?path=statuses`);
-    return normalizeResponse<LeadStatus[]>(response);
+    const result = normalizeResponse<any[]>(response);
+
+    if (result.success && result.data) {
+      apiCache.set(cacheKey, result.data, 300000); // 5 minutes
+    }
+
+    return result;
   } catch (error: any) {
     console.error("fetchStatuses error:", error);
     return {
@@ -111,8 +162,20 @@ export const fetchStatuses = async (): Promise<ApiResponse<LeadStatus[]>> => {
 
 export const fetchUsers = async (): Promise<ApiResponse<any[]>> => {
   try {
+    const cacheKey = "users";
+    const cached = apiCache.get<any[]>(cacheKey);
+    if (cached) {
+      return { success: true, data: cached };
+    }
+
     const response = await axios.get(`${API_BASE_URL}?path=users`);
-    return normalizeResponse<any[]>(response);
+    const result = normalizeResponse<any[]>(response);
+
+    if (result.success && result.data) {
+      apiCache.set(cacheKey, result.data, 300000); // 5 minutes
+    }
+
+    return result;
   } catch (error: any) {
     console.error("fetchUsers error:", error);
     return {
@@ -125,12 +188,29 @@ export const fetchUsers = async (): Promise<ApiResponse<any[]>> => {
   }
 };
 
-export const fetchComments = async (): Promise<ApiResponse<Comment[]>> => {
+export const fetchCommentsByLead = async (
+  leadId: string
+): Promise<ApiResponse<Comment[]>> => {
   try {
-    const response = await axios.get(`${API_BASE_URL}?path=comments`);
-    return normalizeResponse<Comment[]>(response);
+    const cacheKey = `comments_${leadId}`;
+    const cached = apiCache.get<Comment[]>(cacheKey);
+    if (cached) {
+      return { success: true, data: cached };
+    }
+
+    const url = `${API_BASE_URL}?path=comments&leadId=${encodeURIComponent(
+      String(leadId)
+    )}`;
+    const response = await axios.get(url);
+    const result = normalizeResponse<Comment[]>(response);
+
+    if (result.success && result.data) {
+      apiCache.set(cacheKey, result.data, 30000); // 30 seconds
+    }
+
+    return result;
   } catch (error: any) {
-    console.error("fetchComments error:", error);
+    console.error("fetchCommentsByLead error:", error);
     return {
       success: false,
       error:
@@ -141,11 +221,11 @@ export const fetchComments = async (): Promise<ApiResponse<Comment[]>> => {
   }
 };
 
-// fetchLeads supports optional pagination (page, pageSize). If no pagination is sent
-// it behaves like before and returns the full list (but server-side should honor paging).
+// ========== OPTIMIZED LEADS FETCHING ==========
+
 export const fetchLeads = async (
   page = 1,
-  pageSize = 10
+  pageSize = 50
 ): Promise<
   ApiResponse<{
     leads: Lead[];
@@ -155,20 +235,23 @@ export const fetchLeads = async (
   }>
 > => {
   try {
-    const token = getToken();
-    const base = `${API_BASE_URL}?path=leads`;
-    const url = token
-      ? `${base}&token=${token}&page=${page}&pageSize=${pageSize}`
-      : `${base}&page=${page}&pageSize=${pageSize}`;
+    const cacheKey = `leads_${page}_${pageSize}`;
+    const cached = apiCache.get<{ leads: Lead[]; total: number }>(cacheKey);
+    if (cached) {
+      return { success: true, data: cached };
+    }
 
+    const offset = (page - 1) * pageSize;
+    const url = `${API_BASE_URL}?path=leads&limit=${pageSize}&offset=${offset}`;
     const response = await axios.get(url);
     const payload = normalizeResponse<any>(response);
+
     if (!payload.success) return payload as ApiResponse<any>;
 
-    // Map incoming raw records into Lead[] using similar logic to fetchLeadsByStatus
     const raw = payload.data;
     let leadsArr: any[] = [];
     let total: number | undefined = undefined;
+
     if (Array.isArray(raw)) {
       leadsArr = raw;
       total = raw.length;
@@ -177,29 +260,11 @@ export const fetchLeads = async (
       total = typeof raw.total === "number" ? raw.total : leadsArr.length;
     }
 
-    // enrich with statuses/users/comments similar to bulk mapping
-    const [statusesResp, usersResp, commentsResp] = await Promise.all([
+    // Fetch metadata ONCE (cached)
+    const [statusesResp, usersResp] = await Promise.all([
       fetchStatuses(),
       fetchUsers(),
-      fetchComments(),
     ]);
-
-    const commentsByLead = new Map<string, Comment[]>();
-    if (commentsResp.success && commentsResp.data) {
-      commentsResp.data.forEach((c: any) => {
-        const leadId = String(c.leadId || "");
-        const commentObj: Comment = {
-          id: String(c.id || ""),
-          text: c.text || "",
-          userId: String(c.userId || ""),
-          userName: c.userName || "",
-          createdAt: c.createdAt || "",
-        };
-        const arr = commentsByLead.get(leadId) || [];
-        arr.push(commentObj);
-        commentsByLead.set(leadId, arr);
-      });
-    }
 
     const statusMap = new Map<string, string>();
     if (statusesResp.success && statusesResp.data) {
@@ -224,7 +289,7 @@ export const fetchLeads = async (
         String(l.statusId || "")) as any,
       statusId: String(l.statusId || l.status || ""),
       assignedTo: userMap.get(String(l.assignedUserId || "")) || null,
-      comments: commentsByLead.get(String(l.id || "")) || [],
+      comments: [], // Don't load comments here - load on demand
       adName: l.adName || l.ad_name || "",
       adsetName: l.adsetName || l.adset_name || "",
       formName: l.formName || l.form_name || "",
@@ -242,10 +307,10 @@ export const fetchLeads = async (
       updatedAt: l.updatedAt || "",
     }));
 
-    return {
-      success: true,
-      data: { leads: mapped, total, page, pageSize },
-    };
+    const result = { leads: mapped, total, page, pageSize };
+    apiCache.set(cacheKey, result, 60000); // 1 minute
+
+    return { success: true, data: result };
   } catch (error: any) {
     console.error("fetchLeads error:", error);
     return {
@@ -258,118 +323,91 @@ export const fetchLeads = async (
   }
 };
 
-// Fetch leads for a single status with server-side pagination (limit & offset)
 export const fetchLeadsByStatus = async (
   statusId: string,
-  limit = 10,
+  limit = 50,
   offset = 0,
   salesUserId?: string
 ): Promise<ApiResponse<{ leads: Lead[]; total: number }>> => {
   try {
+    const cacheKey = `leads_status_${statusId}_${limit}_${offset}_${
+      salesUserId || "all"
+    }`;
+    const cached = apiCache.get<{ leads: Lead[]; total: number }>(cacheKey);
+    if (cached) {
+      return { success: true, data: cached };
+    }
+
     const url = `${API_BASE_URL}?path=leads&statusId=${encodeURIComponent(
       String(statusId)
-    )}&limit=${limit}&offset=${offset}${
-      salesUserId ? `&userId=${encodeURIComponent(String(salesUserId))}` : ""
-    }`;
+    )}&limit=${limit}&offset=${offset}`;
+
     const response = await axios.get(url);
     const payload = normalizeResponse<any>(response);
+
     if (!payload.success) return payload as ApiResponse<any>;
 
-    // The server should return { data: { leads: [...], total: N } } or an array
     const data = payload.data;
+    let leadsArr = [];
+    let total = 0;
 
-    // If server returns array of leads, wrap into { leads: array, total: array.length }
     if (Array.isArray(data)) {
-      return {
-        success: true,
-        data: { leads: data as any[], total: data.length },
-      };
+      leadsArr = data;
+      total = data.length;
+    } else if (data && (data.leads || data.data)) {
+      leadsArr = data.leads || data.data || [];
+      total = typeof data.total === "number" ? data.total : leadsArr.length;
     }
 
-    // If server returns object with leads and total
-    if (data && (data.leads || data.data)) {
-      let leadsArr = data.leads || data.data || [];
-      // Defensive: if server did not honor statusId filter, filter client-side
-      try {
-        leadsArr = (leadsArr || []).filter((l: any) => {
-          const s = l.statusId || l.status;
-          if (s === undefined || s === null || s === "") return false;
-          return String(s) === String(statusId);
-        });
-      } catch (err) {
-        // ignore and use original array
-      }
+    // Fetch metadata (cached)
+    const [usersResp] = await Promise.all([fetchUsers()]);
 
-      const total =
-        typeof data.total === "number" ? data.total : leadsArr.length;
-
-      // fetch users to map assignedTo (so we can filter for SalesTeam on client)
-      const usersResp = await fetchUsers();
-      const userMap = new Map<string, any>();
-      if (usersResp.success && usersResp.data) {
-        usersResp.data.forEach((u: any) => userMap.set(String(u.id), u));
-      }
-
-      // fetch comments and map by leadId so we can attach comments to each lead
-      const commentsResp = await fetchComments();
-      const commentsByLead = new Map<string, Comment[]>();
-      if (commentsResp.success && commentsResp.data) {
-        (commentsResp.data as any[]).forEach((c: any) => {
-          const leadId = String(c.leadId || "");
-          const commentObj: Comment = {
-            id: String(c.id || ""),
-            text: c.text || "",
-            userId: String(c.userId || ""),
-            userName: c.userName || "",
-            createdAt: c.createdAt || "",
-          };
-          const arr = commentsByLead.get(leadId) || [];
-          arr.push(commentObj);
-          commentsByLead.set(leadId, arr);
-        });
-      }
-
-      const mapped: Lead[] = (leadsArr || []).map((l: any) => ({
-        id: String(l.id || ""),
-        name: l.name || l.full_name || "",
-        email: l.email || "",
-        phone: l.phone || l.phone_number || "",
-        venture: l.venture || "",
-        source: l.source || "",
-        status: (l.status || l.statusId) as any,
-        statusId: String(l.statusId || l.status || ""),
-        assignedTo:
-          userMap.get(String(l.assignedUserId || l.assignedTo || "")) || null,
-        comments: commentsByLead.get(String(l.id || "")) || [],
-        adName: l.adName || l.ad_name || "",
-        adsetName: l.adsetName || l.adset_name || "",
-        formName: l.formName || l.form_name || "",
-        extraFields:
-          typeof l.extraFields === "string"
-            ? (() => {
-                try {
-                  return JSON.parse(l.extraFields || "{}");
-                } catch {
-                  return { misc: String(l.extraFields || "") };
-                }
-              })()
-            : l.extraFields || {},
-        createdAt: l.createdAt || l.created_time || "",
-        updatedAt: l.updatedAt || "",
-      }));
-
-      // If a salesUserId is provided, filter to only leads assigned to that user
-      let finalLeads = mapped;
-      if (salesUserId) {
-        finalLeads = mapped.filter(
-          (m) => m.assignedTo && String(m.assignedTo.id) === String(salesUserId)
-        );
-      }
-
-      return { success: true, data: { leads: finalLeads, total } };
+    const userMap = new Map<string, any>();
+    if (usersResp.success && usersResp.data) {
+      usersResp.data.forEach((u: any) => userMap.set(String(u.id), u));
     }
 
-    return { success: false, error: "Invalid response format" };
+    const mapped: Lead[] = (leadsArr || []).map((l: any) => ({
+      id: String(l.id || ""),
+      name: l.name || l.full_name || "",
+      email: l.email || "",
+      phone: l.phone || l.phone_number || "",
+      venture: l.venture || "",
+      source: l.source || "",
+      status: (l.status || l.statusId) as any,
+      statusId: String(l.statusId || l.status || ""),
+      assignedTo:
+        userMap.get(String(l.assignedUserId || l.assignedTo || "")) || null,
+      comments: [], // Load on demand
+      adName: l.adName || l.ad_name || "",
+      adsetName: l.adsetName || l.adset_name || "",
+      formName: l.formName || l.form_name || "",
+      extraFields:
+        typeof l.extraFields === "string"
+          ? (() => {
+              try {
+                return JSON.parse(l.extraFields || "{}");
+              } catch {
+                return { misc: String(l.extraFields || "") };
+              }
+            })()
+          : l.extraFields || {},
+      createdAt: l.createdAt || l.created_time || "",
+      updatedAt: l.updatedAt || "",
+    }));
+
+    // Filter by salesUserId if provided
+    let finalLeads = mapped;
+    if (salesUserId) {
+      finalLeads = mapped.filter(
+        (m) => m.assignedTo && String(m.assignedTo.id) === String(salesUserId)
+      );
+    }
+
+    const result = { leads: finalLeads, total };
+    apiCache.set(cacheKey, result, 60000); // 1 minute
+
+    return { success: true, data: result };
   } catch (error: any) {
     console.error("fetchLeadsByStatus error:", error);
     return {
@@ -382,9 +420,7 @@ export const fetchLeadsByStatus = async (
   }
 };
 
-// ============================================
-// MUTATION ENDPOINTS
-// ============================================
+// ========== MUTATION ENDPOINTS (Clear Cache) ==========
 
 export const updateLeadStatus = async (
   leadId: string,
@@ -392,6 +428,7 @@ export const updateLeadStatus = async (
 ): Promise<ApiResponse<any>> => {
   try {
     const res = await postAction("leads.updateStatus", { leadId, statusId });
+    apiCache.invalidate("leads"); // Clear all leads cache
     return normalizeResponse(res);
   } catch (error: any) {
     console.error("updateLeadStatus error:", error);
@@ -408,10 +445,11 @@ export const updateLeadStatus = async (
 export const addComment = async (
   leadId: string,
   text: string
-): Promise<ApiResponse<Comment>> => {
+): Promise<ApiResponse<any>> => {
   try {
     const res = await postAction("leads.addComment", { leadId, text });
-    return normalizeResponse<Comment>(res);
+    apiCache.invalidate(`comments_${leadId}`); // Clear this lead's comments
+    return normalizeResponse(res);
   } catch (error: any) {
     console.error("addComment error:", error);
     return {
@@ -424,30 +462,13 @@ export const addComment = async (
   }
 };
 
-export const importLeads = async (
-  leadsArray: Partial<Lead>[]
-): Promise<ApiResponse<ImportSummary>> => {
-  try {
-    const res = await postAction("leads.import", { leads: leadsArray });
-    return normalizeResponse<ImportSummary>(res);
-  } catch (error: any) {
-    console.error("importLeads error:", error);
-    return {
-      success: false,
-      error:
-        error?.response?.data?.error ||
-        error?.message ||
-        "Failed to import leads",
-    };
-  }
-};
-
 export const assignLead = async (
   leadId: string,
   userId: string
 ): Promise<ApiResponse<any>> => {
   try {
     const res = await postAction("leads.assign", { leadId, userId });
+    apiCache.invalidate("leads"); // Clear all leads cache
     return normalizeResponse(res);
   } catch (error: any) {
     console.error("assignLead error:", error);
@@ -461,9 +482,26 @@ export const assignLead = async (
   }
 };
 
-// ============================================
-// AUTHENTICATION
-// ============================================
+export const importLeads = async (
+  leadsArray: Partial<Lead>[]
+): Promise<ApiResponse<ImportSummary>> => {
+  try {
+    const res = await postAction("leads.import", { leads: leadsArray });
+    apiCache.invalidate("leads"); // Clear all leads cache
+    return normalizeResponse(res);
+  } catch (error: any) {
+    console.error("importLeads error:", error);
+    return {
+      success: false,
+      error:
+        error?.response?.data?.error ||
+        error?.message ||
+        "Failed to import leads",
+    };
+  }
+};
+
+// ========== AUTHENTICATION ==========
 
 export const login = async (
   username: string,
@@ -481,11 +519,9 @@ export const login = async (
     }
 
     const result = payload.data;
-
     if (result && result.token) {
       const userObj = { ...result.user, token: result.token };
       localStorage.setItem("user", JSON.stringify(userObj));
-
       return {
         success: true,
         data: { token: result.token, user: result.user },
@@ -504,12 +540,9 @@ export const login = async (
 
 export const logout = (): void => {
   localStorage.removeItem("user");
+  apiCache.clear();
   window.location.href = "/";
 };
-
-// ============================================
-// TEST ENDPOINT
-// ============================================
 
 export const testAPI = async (): Promise<ApiResponse<any>> => {
   try {
@@ -524,24 +557,10 @@ export const testAPI = async (): Promise<ApiResponse<any>> => {
   }
 };
 
-// Fetch comments for a single lead (backend should support ?path=comments&leadId=...)
-export const fetchCommentsByLead = async (
-  leadId: string
-): Promise<ApiResponse<Comment[]>> => {
-  try {
-    const url = `${API_BASE_URL}?path=comments&leadId=${encodeURIComponent(
-      String(leadId)
-    )}`;
-    const response = await axios.get(url);
-    return normalizeResponse<Comment[]>(response);
-  } catch (error: any) {
-    console.error("fetchCommentsByLead error:", error);
-    return {
-      success: false,
-      error:
-        error?.response?.data?.error ||
-        error?.message ||
-        "Failed to fetch comments",
-    };
-  }
+// ========== DEPRECATED - Use fetchCommentsByLead instead ==========
+export const fetchComments = async (): Promise<ApiResponse<Comment[]>> => {
+  console.warn(
+    "fetchComments() is deprecated. Use fetchCommentsByLead(leadId) instead."
+  );
+  return { success: false, error: "Use fetchCommentsByLead(leadId)" };
 };
