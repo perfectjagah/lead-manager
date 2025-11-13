@@ -324,7 +324,16 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                 <PhoneOutlined className="phone-card-icon" />
                 <div className="phone-card-content">
                   <Text className="phone-card-label">Phone</Text>
-                  <Text className="phone-card-number">{lead.phone}</Text>
+                  <a
+                    href={`tel:${lead.phone}`}
+                    className="phone-card-number"
+                    onClick={(e) => {
+                      // Optional: Add analytics or logging here
+                      console.log("Phone number clicked:", lead.phone);
+                    }}
+                  >
+                    {lead.phone}
+                  </a>
                 </div>
                 <div className="phone-card-actions">
                   <Button
