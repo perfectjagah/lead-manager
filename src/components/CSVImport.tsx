@@ -302,11 +302,18 @@ export const CSVImport: React.FC<CSVImportProps> = ({ onImportComplete }) => {
   return (
     <div>
       <Upload
-        accept=".csv"
+        accept=".csv,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         beforeUpload={handleFileUpload}
         showUploadList={false}
+        multiple={false}
+        capture={false} // Important for mobile
       >
-        <Button icon={<UploadOutlined />}>Select CSV File</Button>
+        <Button
+          icon={<UploadOutlined />}
+          size="large" // Larger button for easier mobile tap
+        >
+          Select CSV File
+        </Button>
       </Upload>
 
       {error && (
