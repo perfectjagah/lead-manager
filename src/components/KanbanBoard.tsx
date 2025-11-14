@@ -204,7 +204,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         Object.entries(copy).forEach(([sid, arr]) => {
           newTotals[sid] = arr.length;
         });
-        setTotals((_) => ({ ...totals, ...newTotals }));
+        setTotals(() => newTotals);
 
         return copy;
       });
