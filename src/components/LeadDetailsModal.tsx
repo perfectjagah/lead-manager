@@ -44,7 +44,7 @@ interface LeadDetailsModalProps {
   lead: Lead | null;
   isOpen: boolean;
   onClose: () => void;
-  onLeadUpdate: () => void;
+  onLeadUpdate: (updatedLead?: Lead) => void;
   userRole: "Admin" | "SalesTeam";
   currentUser: User;
   salesTeamMembers: User[];
@@ -169,7 +169,22 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
           key: "assignLead",
           duration: 2,
         });
-        onLeadUpdate();
+        // Build an updated lead object so parent can update its local lists without full reload
+        const assignedUser =
+          salesTeamMembers.find((m) => String(m.id) === String(userId)) ||
+          ({ id: userId, name: "Unknown" } as any);
+        const updatedLead = {
+          ...(lead as any),
+          assignedTo: assignedUser,
+        } as Lead;
+        // let parent update its local caches/UI without forcing a full refresh
+        try {
+          onLeadUpdate && onLeadUpdate(updatedLead);
+        } catch (e) {
+          try {
+            onLeadUpdate && onLeadUpdate();
+          } catch {}
+        }
       } else {
         message.error({
           content: response.error || "Failed to assign",

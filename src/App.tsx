@@ -24,8 +24,8 @@ export const App: React.FC = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [showCSVImport, setShowCSVImport] = useState(false);
   const [salesTeamMembers, setSalesTeamMembers] = useState<User[]>([]);
-  const reloadBoardRef = useRef<(() => Promise<void>) | null>(null);
-  const reloadTableRef = useRef<(() => Promise<void>) | null>(null);
+  const reloadBoardRef = useRef<any>(null);
+  const reloadTableRef = useRef<any>(null);
   const [viewMode, setViewMode] = useState<"kanban" | "table">("kanban");
 
   const { token } = theme.useToken();
@@ -80,13 +80,64 @@ export const App: React.FC = () => {
     setSelectedLead(lead);
   };
 
-  const handleLeadUpdate = () => {
+  const handleLeadUpdate = (updatedLead?: Lead) => {
+    if (updatedLead) {
+      message.success("Lead updated");
+      // update currently selected lead view
+      setSelectedLead(updatedLead);
+      try {
+        // If Kanban/table exposed an updateLead helper, use it to update local lists without full reload
+        if (
+          reloadBoardRef.current &&
+          typeof reloadBoardRef.current.updateLead === "function"
+        ) {
+          reloadBoardRef.current.updateLead(updatedLead);
+        } else if (
+          reloadBoardRef.current &&
+          typeof reloadBoardRef.current === "function"
+        ) {
+          // legacy support
+          (reloadBoardRef.current as Function)();
+        }
+      } catch (err) {
+        // ignore
+      }
+
+      try {
+        if (
+          reloadTableRef.current &&
+          typeof reloadTableRef.current.updateLead === "function"
+        ) {
+          reloadTableRef.current.updateLead(updatedLead);
+        } else if (
+          reloadTableRef.current &&
+          typeof reloadTableRef.current === "function"
+        ) {
+          (reloadTableRef.current as Function)();
+        }
+      } catch (err) {
+        // ignore
+      }
+
+      return;
+    }
+
+    // fallback: full reload when no single-lead info provided
     message.success("Lead updated successfully");
-    // Ask the Kanban board to reload its data (if available)
     (async () => {
       try {
-        if (reloadBoardRef.current) await reloadBoardRef.current();
-        if (reloadTableRef.current) await reloadTableRef.current();
+        if (reloadBoardRef.current) {
+          if (typeof reloadBoardRef.current === "function")
+            await reloadBoardRef.current();
+          else if (reloadBoardRef.current.reload)
+            await reloadBoardRef.current.reload();
+        }
+        if (reloadTableRef.current) {
+          if (typeof reloadTableRef.current === "function")
+            await reloadTableRef.current();
+          else if (reloadTableRef.current.reload)
+            await reloadTableRef.current.reload();
+        }
       } catch (err) {
         // ignore
       }
@@ -197,12 +248,12 @@ export const App: React.FC = () => {
               onLeadClick={handleLeadClick}
               userRole={user.role}
               userId={user.id}
-              onReady={(fn) => (reloadBoardRef.current = fn)}
+              onReady={(helpers) => (reloadBoardRef.current = helpers)}
             />
           ) : (
             <LeadsTable
               onLeadClick={handleLeadClick}
-              onReady={(fn) => (reloadTableRef.current = fn)}
+              onReady={(helpers) => (reloadTableRef.current = helpers)}
               userRole={user.role}
               userId={user.id}
             />

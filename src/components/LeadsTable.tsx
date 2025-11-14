@@ -9,7 +9,10 @@ const { Option } = Select;
 
 interface LeadsTableProps {
   onLeadClick: (lead: Lead) => void;
-  onReady?: (reloadFn: () => Promise<void>) => void;
+  onReady?: (helpers: {
+    reload: () => Promise<void>;
+    updateLead: (lead: Lead) => void;
+  }) => void;
   userRole?: "Admin" | "SalesTeam";
   userId?: string;
 }
@@ -106,7 +109,21 @@ export const LeadsTable: React.FC<LeadsTableProps> = ({
 
   // expose reload
   useEffect(() => {
-    if (onReady) onReady(() => loadLeads(1, pageSize));
+    if (onReady)
+      onReady({
+        reload: () => loadLeads(1, pageSize),
+        updateLead: (updatedLead: Lead) => {
+          setLeads((prev) => {
+            const idx = prev.findIndex((p) => p.id === updatedLead.id);
+            if (idx !== -1) {
+              const copy = [...prev];
+              copy[idx] = updatedLead;
+              return copy;
+            }
+            return prev;
+          });
+        },
+      });
   }, [onReady, loadLeads, pageSize]);
 
   useEffect(() => {

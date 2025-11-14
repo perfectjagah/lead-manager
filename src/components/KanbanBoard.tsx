@@ -24,7 +24,10 @@ interface KanbanBoardProps {
   onLeadClick: (lead: Lead) => void;
   userRole: "Admin" | "SalesTeam";
   userId: string;
-  onReady?: (reloadFunc: () => Promise<void>) => void;
+  onReady?: (helpers: {
+    reload: () => Promise<void>;
+    updateLead: (lead: Lead) => void;
+  }) => void;
 }
 
 export const KanbanBoard: React.FC<KanbanBoardProps> = ({
@@ -176,6 +179,39 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     await loadLeads();
   }, [loadLeads]);
 
+  // Update a single lead in the local per-status buckets without full reload
+  const updateLead = useCallback(
+    (updatedLead: Lead) => {
+      setLeadsByStatus((prev) => {
+        const copy: Record<string, Lead[]> = { ...prev };
+        // remove the lead from any bucket it currently exists in
+        Object.keys(copy).forEach((sid) => {
+          copy[sid] = (copy[sid] || []).filter((l) => l.id !== updatedLead.id);
+        });
+
+        const newSid = String(updatedLead.statusId || "");
+        if (!copy[newSid]) copy[newSid] = [];
+
+        // insert updated lead into its status bucket and keep newest-first ordering
+        copy[newSid] = [updatedLead, ...(copy[newSid] || [])].sort(
+          (a, b) =>
+            (new Date(b.createdAt).getTime() || 0) -
+            (new Date(a.createdAt).getTime() || 0)
+        );
+
+        // recompute totals from bucket lengths to keep UI consistent
+        const newTotals: Record<string, number> = {};
+        Object.entries(copy).forEach(([sid, arr]) => {
+          newTotals[sid] = arr.length;
+        });
+        setTotals((_) => ({ ...totals, ...newTotals }));
+
+        return copy;
+      });
+    },
+    [totals]
+  );
+
   useEffect(() => {
     loadLeads();
   }, [userRole, userId]);
@@ -183,9 +219,9 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   // Expose reloadLeads to parent
   useEffect(() => {
     if (onReady) {
-      onReady(reloadLeads);
+      onReady({ reload: reloadLeads, updateLead });
     }
-  }, [onReady, reloadLeads]);
+  }, [onReady, reloadLeads, updateLead]);
 
   const onDragEnd = async (result: DropResult) => {
     const { source, destination, draggableId } = result;
