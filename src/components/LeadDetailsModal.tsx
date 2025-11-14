@@ -58,7 +58,6 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
   onClose,
   onLeadUpdate,
   userRole,
-  currentUser,
   salesTeamMembers,
 }) => {
   const [newComment, setNewComment] = useState("");
