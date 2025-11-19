@@ -5,8 +5,7 @@ import { Lead, Comment, ImportSummary, ApiResponse } from "../types";
 
 // New Azure API base URL (use env var if provided)
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  "https://leadmanager-api-cab5byc6ave2fnej.centralindia-01.azurewebsites.net";
+  import.meta.env.VITE_API_URL || "https://sagardontdelete.coolkaru.com/";
 
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
