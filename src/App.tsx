@@ -214,8 +214,8 @@ export const App: React.FC = () => {
         </Header>
         <Content
           style={{
-            margin: "24px 16px",
-            padding: 24,
+            // margin: "24px 16px",
+            // padding: 24,
             background: token.colorBgContainer,
             borderRadius: token.borderRadius,
             minHeight: 280,
