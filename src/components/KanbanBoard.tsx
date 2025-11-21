@@ -236,7 +236,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     try {
       const res = await fetchUsers();
       if (res.success && res.data) {
-        const sales = (res.data as any[]).filter((u) => u.role === "SalesTeam");
+        const sales = res.data as any[];
         setSalesMembers(sales);
       }
     } catch (err) {
@@ -339,7 +339,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
         const promises = [
           (async () => {
-            const res = await fetchLeadsByStatus(oldStatusId!, PAGE_SIZE, 1, assignedFilterParam);
+            const res = await fetchLeadsByStatus(
+              oldStatusId!,
+              PAGE_SIZE,
+              1,
+              assignedFilterParam
+            );
             if (res.success && res.data) {
               if (loadGenRef.current !== revertGen) return;
               const d = res.data as any;
@@ -359,7 +364,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             }
           })(),
           (async () => {
-            const res = await fetchLeadsByStatus(newStatusId, PAGE_SIZE, 1, assignedFilterParam);
+            const res = await fetchLeadsByStatus(
+              newStatusId,
+              PAGE_SIZE,
+              1,
+              assignedFilterParam
+            );
             if (res.success && res.data) {
               if (loadGenRef.current !== revertGen) return;
               const d = res.data as any;
@@ -505,7 +515,14 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     <div className="kanban-container">
       {/* Top controls: sales-person filter (Admin only) */}
       {userRole === "Admin" && (
-        <div style={{ marginBottom: 12, display: "flex", gap: 8, justifyContent: "flex-end" }}>
+        <div
+          style={{
+            marginBottom: 12,
+            display: "flex",
+            gap: 8,
+            justifyContent: "flex-end",
+          }}
+        >
           <Select
             allowClear
             placeholder="Filter by sales person"
@@ -522,9 +539,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
               </Select.Option>
             ))}
           </Select>
-          <Button onClick={() => resetAndLoadWithFilter(null)}>
-            Clear
-          </Button>
+          <Button onClick={() => resetAndLoadWithFilter(null)}>Clear</Button>
         </div>
       )}
       <DragDropContext onDragEnd={onDragEnd}>
@@ -538,12 +553,15 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                   !expandedStatus[String(status.id)] ? "collapsed" : ""
                 }`}
               >
-                <div className="column-header">
+                <div
+                  className="column-header"
+                  onClick={() => toggleColumn(String(status.id))}
+                >
                   <Title level={5} className="column-title">
                     <Button
                       type="text"
                       className="column-toggle"
-                      onClick={() => toggleColumn(String(status.id))}
+                      // onClick={() => toggleColumn(String(status.id))}
                       icon={
                         expandedStatus[String(status.id)] ? (
                           <DownOutlined />

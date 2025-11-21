@@ -41,9 +41,7 @@ export const App: React.FC = () => {
       try {
         const res = await fetchUsers();
         if (res.success && res.data) {
-          const sales = (res.data as any[]).filter(
-            (u) => u.role === "SalesTeam"
-          );
+          const sales = res.data as any[];
           setSalesTeamMembers(sales as User[]);
         }
       } catch (err) {
