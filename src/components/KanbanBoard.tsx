@@ -6,7 +6,7 @@ import {
   Draggable,
   DropResult,
 } from "react-beautiful-dnd";
-import { Typography, Spin, message, Button } from "antd";
+import { Typography, Spin, message, Button, Select } from "antd";
 import { DownOutlined, RightOutlined } from "@ant-design/icons";
 import { LeadCard } from "./LeadCard";
 import {
@@ -14,6 +14,7 @@ import {
   updateLeadStatus,
   fetchStatuses,
   fetchLeadsByStatus,
+  fetchUsers,
 } from "../services/api";
 import { Lead } from "../types";
 import "./KanbanBoard.css";
@@ -41,6 +42,8 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     {}
   );
   const [totals, setTotals] = useState<Record<string, number>>({});
+  const [salesMembers, setSalesMembers] = useState<any[]>([]);
+  const [salesFilter, setSalesFilter] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [statuses, setStatuses] = useState<any[]>([]);
   const [expandedStatus, setExpandedStatus] = useState<Record<string, boolean>>(
@@ -58,8 +61,12 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
   const loadTimers = useRef<Record<string, number | null>>({});
   // track pages currently being fetched to prevent duplicate concurrent fetches
   const inProgressPagesRef = useRef<Record<string, Set<number>>>({});
+  // generation token to ignore stale responses from earlier loads
+  const loadGenRef = useRef<number>(0);
 
-  const loadLeads = async () => {
+  const loadLeads = async (assignedFilterOverride?: string | null) => {
+    // bump generation so previous in-flight responses are ignored
+    const myGen = ++loadGenRef.current;
     setLoading(true);
     try {
       // We still call the bulk endpoints for compatibility, but we'll drive rendering from per-status paged calls
@@ -85,11 +92,16 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
         await Promise.all(
           s.map(async (st) => {
             try {
+              const assignedFilterParam =
+                userRole && userRole !== "Admin"
+                  ? userId
+                  : (assignedFilterOverride ?? salesFilter) || undefined;
+
               const res = await fetchLeadsByStatus(
                 String(st.id),
                 PAGE_SIZE,
                 1,
-                userRole === "SalesTeam" ? userId : undefined
+                assignedFilterParam
               );
               if (res.success && res.data) {
                 const d = res.data as any;
@@ -104,6 +116,9 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                       (new Date(b.createdAt).getTime() || 0) -
                       (new Date(a.createdAt).getTime() || 0)
                   );
+
+                // ignore stale responses from previous generations
+                if (loadGenRef.current !== myGen) return;
 
                 setLeadsByStatus((prev) => ({
                   ...prev,
@@ -216,6 +231,49 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     loadLeads();
   }, [userRole, userId]);
 
+  // Load sales team members for Admin filter
+  const loadSalesMembers = async () => {
+    try {
+      const res = await fetchUsers();
+      if (res.success && res.data) {
+        const sales = (res.data as any[]).filter((u) => u.role === "SalesTeam");
+        setSalesMembers(sales);
+      }
+    } catch (err) {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    if (userRole === "Admin") loadSalesMembers();
+  }, [userRole]);
+
+  // Helper to reset pending timers/in-progress markers and reload with a specific filter
+  const resetAndLoadWithFilter = (filter: string | null) => {
+    // clear any pending load timers
+    try {
+      Object.keys(loadTimers.current).forEach((k) => {
+        const t = loadTimers.current[k];
+        if (t) {
+          window.clearTimeout(t as number);
+        }
+        loadTimers.current[k] = null;
+      });
+    } catch {}
+
+    // clear in-progress pages so new fetches can proceed
+    inProgressPagesRef.current = {};
+
+    // reset pagination buckets and totals
+    setPagesFetched({});
+    setLeadsByStatus({});
+    setTotals({});
+
+    // update state and immediately load with override to avoid stale-state races
+    setSalesFilter(filter);
+    loadLeads(filter);
+  };
+
   // Expose reloadLeads to parent
   useEffect(() => {
     if (onReady) {
@@ -274,15 +332,16 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
       message.error(response.error || "Failed to update lead status");
       // revert by reloading first page for affected statuses
       try {
+        const assignedFilterParam =
+          userRole && userRole !== "Admin" ? userId : salesFilter || undefined;
+
+        const revertGen = loadGenRef.current;
+
         const promises = [
           (async () => {
-            const res = await fetchLeadsByStatus(
-              oldStatusId!,
-              PAGE_SIZE,
-              1,
-              userRole === "SalesTeam" ? userId : undefined
-            );
+            const res = await fetchLeadsByStatus(oldStatusId!, PAGE_SIZE, 1, assignedFilterParam);
             if (res.success && res.data) {
+              if (loadGenRef.current !== revertGen) return;
               const d = res.data as any;
               setLeadsByStatus((p) => ({
                 ...p,
@@ -300,13 +359,9 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
             }
           })(),
           (async () => {
-            const res = await fetchLeadsByStatus(
-              newStatusId,
-              PAGE_SIZE,
-              1,
-              userRole === "SalesTeam" ? userId : undefined
-            );
+            const res = await fetchLeadsByStatus(newStatusId, PAGE_SIZE, 1, assignedFilterParam);
             if (res.success && res.data) {
+              if (loadGenRef.current !== revertGen) return;
               const d = res.data as any;
               setLeadsByStatus((p) => ({ ...p, [newStatusId]: d.leads || [] }));
               setTotals((t) => ({
@@ -362,6 +417,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     loadTimers.current[String(statusId)] = window.setTimeout(async () => {
       setLoadingMore((l) => ({ ...l, [String(statusId)]: true }));
       const pageToFetch = nextPage;
+      const pageGen = loadGenRef.current;
 
       // initialize in-progress set for this status
       if (!inProgressPagesRef.current[String(statusId)])
@@ -378,13 +434,23 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
       inProgressPagesRef.current[String(statusId)].add(pageToFetch);
 
       try {
+        const assignedFilterParam =
+          userRole && userRole !== "Admin" ? userId : salesFilter || undefined;
+
         const res = await fetchLeadsByStatus(
           String(statusId),
           PAGE_SIZE,
           pageToFetch,
-          userRole === "SalesTeam" ? userId : undefined
+          assignedFilterParam
         );
         if (res.success && res.data) {
+          // ignore stale page responses
+          if (loadGenRef.current !== pageGen) {
+            inProgressPagesRef.current[String(statusId)].delete(pageToFetch);
+            setLoadingMore((l) => ({ ...l, [String(statusId)]: false }));
+            loadTimers.current[String(statusId)] = null;
+            return;
+          }
           const d = res.data as any;
           // Defensive filter for appended page
           const incomingPage: Lead[] = (d.leads || []).filter(
@@ -437,6 +503,30 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
 
   return (
     <div className="kanban-container">
+      {/* Top controls: sales-person filter (Admin only) */}
+      {userRole === "Admin" && (
+        <div style={{ marginBottom: 12, display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <Select
+            allowClear
+            placeholder="Filter by sales person"
+            style={{ minWidth: 220 }}
+            value={salesFilter || undefined}
+            onChange={(val) => {
+              const v = val || null;
+              resetAndLoadWithFilter(v);
+            }}
+          >
+            {salesMembers.map((m) => (
+              <Select.Option key={m.id} value={String(m.id)}>
+                {m.name}
+              </Select.Option>
+            ))}
+          </Select>
+          <Button onClick={() => resetAndLoadWithFilter(null)}>
+            Clear
+          </Button>
+        </div>
+      )}
       <DragDropContext onDragEnd={onDragEnd}>
         <div className="kanban-board">
           {statuses.map((status) => {
