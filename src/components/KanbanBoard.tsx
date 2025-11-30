@@ -443,7 +443,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
                   <Button
                     type="text"
                     className="column-toggle"
-                    onClick={() => toggleColumn(String(status.id))}
+                    // onClick={() => toggleColumn(String(status.id))}
                     icon={
                       expandedStatus[String(status.id)] ? (
                         <DownOutlined />
