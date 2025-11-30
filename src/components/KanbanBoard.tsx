@@ -1,17 +1,11 @@
 // src/components/KanbanBoard.tsx
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import {
-  DragDropContext,
-  Droppable,
-  Draggable,
-  DropResult,
-} from "react-beautiful-dnd";
+// drag-drop removed: rendering static columns
 import { Typography, Spin, message, Button, Select } from "antd";
 import { DownOutlined, RightOutlined } from "@ant-design/icons";
 import { LeadCard } from "./LeadCard";
 import {
   fetchLeads,
-  updateLeadStatus,
   fetchStatuses,
   fetchLeadsByStatus,
   fetchUsers,
@@ -281,119 +275,7 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
     }
   }, [onReady, reloadLeads, updateLead]);
 
-  const onDragEnd = async (result: DropResult) => {
-    const { source, destination, draggableId } = result;
-
-    if (!destination) return;
-
-    if (
-      source.droppableId === destination.droppableId &&
-      source.index === destination.index
-    ) {
-      return;
-    }
-
-    // find the lead in per-status buckets
-    let lead: Lead | undefined;
-    let oldStatusId: string | undefined = undefined;
-    Object.entries(leadsByStatus).forEach(([sid, arr]) => {
-      const found = arr.find((x) => x.id === draggableId);
-      if (found) {
-        lead = found;
-        oldStatusId = sid;
-      }
-    });
-    if (!lead || !oldStatusId) return;
-
-    const newStatusId = destination.droppableId;
-
-    // Optimistic update: remove from old status and insert into new status at destination.index
-    setLeadsByStatus((prev) => {
-      const copy: Record<string, Lead[]> = { ...prev };
-      const src = Array.isArray(copy[oldStatusId!])
-        ? [...copy[oldStatusId!]]
-        : [];
-      const dst = Array.isArray(copy[newStatusId])
-        ? [...copy[newStatusId]]
-        : [];
-      const idx = src.findIndex((l) => l.id === draggableId);
-      const movingLead: Lead =
-        idx !== -1 ? src.splice(idx, 1)[0] : ({ ...(lead as any) } as Lead);
-      movingLead.statusId = String(newStatusId);
-      dst.splice(destination.index, 0, movingLead);
-      copy[oldStatusId!] = src;
-      copy[newStatusId] = dst;
-      return copy;
-    });
-
-    // Update backend
-    const response = await updateLeadStatus(draggableId, newStatusId);
-    if (!response.success) {
-      message.error(response.error || "Failed to update lead status");
-      // revert by reloading first page for affected statuses
-      try {
-        const assignedFilterParam =
-          userRole && userRole !== "Admin" ? userId : salesFilter || undefined;
-
-        const revertGen = loadGenRef.current;
-
-        const promises = [
-          (async () => {
-            const res = await fetchLeadsByStatus(
-              oldStatusId!,
-              PAGE_SIZE,
-              1,
-              assignedFilterParam
-            );
-            if (res.success && res.data) {
-              if (loadGenRef.current !== revertGen) return;
-              const d = res.data as any;
-              setLeadsByStatus((p) => ({
-                ...p,
-                [oldStatusId!]: d.leads || [],
-              }));
-              setTotals((t) => ({
-                ...t,
-                [oldStatusId!]:
-                  typeof d.total === "number"
-                    ? d.total
-                    : d.leads
-                    ? d.leads.length
-                    : 0,
-              }));
-            }
-          })(),
-          (async () => {
-            const res = await fetchLeadsByStatus(
-              newStatusId,
-              PAGE_SIZE,
-              1,
-              assignedFilterParam
-            );
-            if (res.success && res.data) {
-              if (loadGenRef.current !== revertGen) return;
-              const d = res.data as any;
-              setLeadsByStatus((p) => ({ ...p, [newStatusId]: d.leads || [] }));
-              setTotals((t) => ({
-                ...t,
-                [newStatusId]:
-                  typeof d.total === "number"
-                    ? d.total
-                    : d.leads
-                    ? d.leads.length
-                    : 0,
-              }));
-            }
-          })(),
-        ];
-        await Promise.all(promises);
-      } catch (err) {
-        // ignore
-      }
-    } else {
-      message.success("Lead status updated");
-    }
-  };
+  // drag-drop removed: no onDragEnd handler
 
   if (loading) {
     return (
@@ -542,131 +424,90 @@ export const KanbanBoard: React.FC<KanbanBoardProps> = ({
           <Button onClick={() => resetAndLoadWithFilter(null)}>Clear</Button>
         </div>
       )}
-      <DragDropContext onDragEnd={onDragEnd}>
-        <div className="kanban-board">
-          {statuses.map((status) => {
-            const columnLeads = getColumnLeads(status.id);
-            return (
-              <div
-                key={status.id}
-                className={`kanban-column ${
-                  !expandedStatus[String(status.id)] ? "collapsed" : ""
-                }`}
-              >
-                <div
-                  className="column-header"
-                  onClick={() => toggleColumn(String(status.id))}
-                >
-                  <Title level={5} className="column-title">
-                    <Button
-                      type="text"
-                      className="column-toggle"
-                      // onClick={() => toggleColumn(String(status.id))}
-                      icon={
-                        expandedStatus[String(status.id)] ? (
-                          <DownOutlined />
-                        ) : (
-                          <RightOutlined />
-                        )
-                      }
-                    />
-                    <span
-                      className="status-indicator"
-                      style={{
-                        backgroundColor: status.color || "#6b7280",
-                      }}
-                    />
-                    <span className="status-name">{status.name}</span>
-                    <span className="status-count">{`${columnLeads.length} / ${
-                      totals[String(status.id)] ?? "-"
-                    }`}</span>
-                  </Title>
-                </div>
 
-                <Droppable droppableId={String(status.id)}>
-                  {(provided, snapshot) => (
-                    <div
-                      ref={provided.innerRef}
-                      {...provided.droppableProps}
-                      className={`cards-container ${
-                        snapshot.isDraggingOver ? "dragging-over" : ""
-                      }`}
-                      onScroll={(e) => {
-                        const el = e.currentTarget as HTMLElement;
-                        if (!el) return;
-                        if (
-                          el.scrollTop + el.clientHeight >=
-                          el.scrollHeight - 80
-                        ) {
-                          loadMoreForStatus(String(status.id));
-                        }
-                      }}
-                    >
-                      {columnLeads.length === 0 ? (
-                        <div className="empty-column">
-                          <span className="empty-icon">📋</span>
-                          <span className="empty-text">No leads</span>
-                        </div>
+      <div className="kanban-board">
+        {statuses.map((status) => {
+          const columnLeads = getColumnLeads(status.id);
+          return (
+            <div
+              key={status.id}
+              className={`kanban-column ${
+                !expandedStatus[String(status.id)] ? "collapsed" : ""
+              }`}
+            >
+              <div
+                className="column-header"
+                onClick={() => toggleColumn(String(status.id))}
+              >
+                <Title level={5} className="column-title">
+                  <Button
+                    type="text"
+                    className="column-toggle"
+                    onClick={() => toggleColumn(String(status.id))}
+                    icon={
+                      expandedStatus[String(status.id)] ? (
+                        <DownOutlined />
                       ) : (
-                        // render loaded leads for this column
-                        columnLeads.map((lead, index) => (
-                          <Draggable
-                            key={lead.id}
-                            draggableId={lead.id}
-                            index={index}
-                          >
-                            {(provided, snapshot) => (
-                              <div
-                                ref={provided.innerRef}
-                                {...provided.draggableProps}
-                                {...provided.dragHandleProps}
-                                className={`draggable-card ${
-                                  snapshot.isDragging ? "is-dragging" : ""
-                                }`}
-                                style={{
-                                  ...provided.draggableProps.style,
-                                }}
-                              >
-                                <LeadCard
-                                  lead={lead}
-                                  onClick={onLeadClick}
-                                  isDragging={snapshot.isDragging}
-                                />
-                              </div>
-                            )}
-                          </Draggable>
-                        ))
-                      )}
-                      {provided.placeholder}
-                      {/* Load more UI */}
-                      <div style={{ padding: 8, textAlign: "center" }}>
-                        {loadingMore[String(status.id)] ? (
-                          <div>
-                            <Spin size="small" />
-                          </div>
-                        ) : (
-                          columnLeads.length <
-                            (totals[String(status.id)] || 0) && (
-                            <Button
-                              type="default"
-                              size="small"
-                              onClick={() =>
-                                loadMoreForStatus(String(status.id))
-                              }
-                            >
-                              Load more
-                            </Button>
-                          )
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </Droppable>
+                        <RightOutlined />
+                      )
+                    }
+                  />
+                  <span
+                    className="status-indicator"
+                    style={{ backgroundColor: status.color || "#6b7280" }}
+                  />
+                  <span className="status-name">{status.name}</span>
+                  <span className="status-count">{`${columnLeads.length} / ${
+                    totals[String(status.id)] ?? "-"
+                  }`}</span>
+                </Title>
               </div>
-            );
-          })}
-        </div>
-      </DragDropContext>
+
+              <div
+                className={`cards-container`}
+                onScroll={(e) => {
+                  const el = e.currentTarget as HTMLElement;
+                  if (!el) return;
+                  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 80) {
+                    loadMoreForStatus(String(status.id));
+                  }
+                }}
+              >
+                {columnLeads.length === 0 ? (
+                  <div className="empty-column">
+                    <span className="empty-icon">📋</span>
+                    <span className="empty-text">No leads</span>
+                  </div>
+                ) : (
+                  columnLeads.map((lead) => (
+                    <div key={lead.id} className={`draggable-card`}>
+                      <LeadCard lead={lead} onClick={onLeadClick} />
+                    </div>
+                  ))
+                )}
+
+                <div style={{ padding: 8, textAlign: "center" }}>
+                  {loadingMore[String(status.id)] ? (
+                    <div>
+                      <Spin size="small" />
+                    </div>
+                  ) : (
+                    columnLeads.length < (totals[String(status.id)] || 0) && (
+                      <Button
+                        type="default"
+                        size="small"
+                        onClick={() => loadMoreForStatus(String(status.id))}
+                      >
+                        Load more
+                      </Button>
+                    )
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };
